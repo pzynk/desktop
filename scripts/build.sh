@@ -84,11 +84,11 @@ cat <<EOF > release/latest.json
   "platforms": {
     "linux-x86_64": {
       "signature": "$DEB_SIG",
-      "url": "https://github.com/pzynk/desktop/raw/main/release/deb/app.deb"
+      "url": "https://raw.githubusercontent.com/pzynk/desktop/refs/heads/main/release/deb/app.deb"
     },
     "windows-x86_64": {
       "signature": "$WIN_SIG",
-      "url": "https://github.com/pzynk/desktop/raw/main/release/windows/app.exe"
+      "url": "https://raw.githubusercontent.com/pzynk/desktop/refs/heads/main/release/windows/app.exe"
     },
     "darwin-x86_64": {
       "signature": "",
