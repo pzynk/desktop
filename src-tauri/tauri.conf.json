@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Pzync",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "identifier": "com.adhil.pzync",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -55,7 +55,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQxNjE5RENGMDc5OUZEQjUKUldTMS9aa0h6NTFoUWQ5Z1lkQmNranZKRUhpd1ZHcnNrdEw3eGY3ZTNjTmVONnJhWDgrd2FCRy8K",
       "endpoints": [
-        "https://github.com/pzynk/desktop/release/latest.json"
+        "https://raw.githubusercontent.com/pzynk/desktop/refs/heads/main/release/latest.json"
       ]
     }
   }
