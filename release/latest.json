@@ -1,14 +1,14 @@
 {
-  "version": "0.1.0",
-  "notes": "Release v0.1.0",
-  "pub_date": "2026-06-06T11:16:33Z",
+  "version": "0.1.1",
+  "notes": "Release v0.1.1",
+  "pub_date": "2026-06-06T11:42:45Z",
   "platforms": {
     "linux-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMS9aa0h6NTFoUVNXelp4ZFQ2RXhaaFJXWnJDd0lidXMxclRJb1RpZkw3RHhWblorVllFTS9yb3NabGlzUzdNbkc5cFh3QmovT2NxTEpVdkpQcVNjN2d4aGdjMlJ0aGdNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwNzQ0NTQ5CWZpbGU6UHp5bmNfMC4xLjBfYW1kNjQuZGViCkVrV3E2Y1A0YVppZDFiT2VmRFhoNStEaEFWWDQ0QmpPcXpWNlFpeEtOaTN1bHJhUm5tV2VhUklqUmJoRmMrNzlTVHZCZmV4TE8zR1pXWUVQUy9aS0N3PT0K",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMS9aa0h6NTFoUWVDcHhudkwrOFVVYkFkcUtENUZEQ01kcXpGWCtRdy9KYmRaRVFaRHZzN1dXQlhid2JMcVg3VGlRTVNMdDk4UmdRZnFUZnF2KysvRmxuaGpiV2xTV1FzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwNzQ2MTIxCWZpbGU6UHp5bmNfMC4xLjFfYW1kNjQuZGViCjZ1VDB0ZlQwSFlUVnFxYytYa1o3TWRSTWJSc2diMXhIVkgrS1dsTlBkdXF2T3dyQnN2NGdoK2s5KzdOU3J1M0JSRWJWcmpjczJIMzZ5aEorQ0luK0R3PT0K",
       "url": "https://github.com/pzynk/desktop/raw/main/release/deb/app.deb"
     },
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMS9aa0h6NTFoUVZsMDhDN0t0TEJ5ZUVSYStmb3A5N09oT0NEUUVobUlJS2RPUkN4QW9vOXRKNldZOFowc2xVZ3cyc2krY0prZjRNcFRLcjVlSTY0dmxGcUhlTjZJS1EwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwNzQ0NTkzCWZpbGU6UHp5bmNfMC4xLjBfeDY0LXNldHVwLmV4ZQpaYS8zbXNZMis4cVBMeUFnWDNoUEdKUlZ5WER1dGhQV2ZTcGsvQlpyZG1TeGRtTUVVL21HODFnVWI0bWZOQlh4U1lrc0pBZVZ4VWo5MEhwbXFKeHBCUT09Cg==",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMS9aa0h6NTFoUVVNVTA4bjBTQUdaMCtSTnpIS3B6ZUJzZENEeU1PVEd0eEtqMlp1VTBiWGZjbmUrSVhvQ1YyMllLYk5maGlDSmFqbndmM2VKZXByNis5UmFPSmZBc1FNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwNzQ2MTY1CWZpbGU6UHp5bmNfMC4xLjFfeDY0LXNldHVwLmV4ZQowL3hvREhkdDY4V015OFNsNEI3cmdURGh1dmtMZVIybWM3Wk1CNGZDZXNrc3E1YUh1TFVDLzhCRERabzlDTVRVamx5bURaaFFZY2FLcnJhR1ZpRzVEdz09Cg==",
       "url": "https://github.com/pzynk/desktop/raw/main/release/windows/app.exe"
     },
     "darwin-x86_64": {

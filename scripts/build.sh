@@ -1,6 +1,27 @@
 #!/bin/bash
 set -e
 
+# Extract current version
+CURRENT_VERSION=$(node -e "console.log(require('./src-tauri/tauri.conf.json').version)")
+
+# Prompt for new version
+read -p "Enter new version (current is $CURRENT_VERSION): " VERSION
+
+if [ -z "$VERSION" ]; then
+  echo "No version entered. Keeping current version ($CURRENT_VERSION)."
+  VERSION=$CURRENT_VERSION
+else
+  # Update version in tauri.conf.json
+  echo "Updating tauri.conf.json to version $VERSION..."
+  node -e "
+  const fs = require('fs');
+  const file = './src-tauri/tauri.conf.json';
+  const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+  data.version = '$VERSION';
+  fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf8');
+  "
+fi
+
 # 1. Run the build scripts
 echo "Building Debian package..."
 sh ./scripts/build-deb.sh
@@ -8,9 +29,7 @@ sh ./scripts/build-deb.sh
 echo "Building Windows setup..."
 sh ./scripts/build-win.sh
 
-# 2. Extract version from tauri.conf.json
-VERSION=$(node -e "console.log(require('./src-tauri/tauri.conf.json').version)")
-echo "Detected version: $VERSION"
+echo "Building version: $VERSION"
 
 # 3. Define source and destination paths
 DEB_SRC="src-tauri/target/release/bundle/deb/Pzync_${VERSION}_amd64.deb"
