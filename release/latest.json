@@ -1,14 +1,14 @@
 {
-  "version": "0.1.6",
-  "notes": "Release v0.1.6",
-  "pub_date": "2026-06-06T13:01:57Z",
+  "version": "0.1.7",
+  "notes": "Release v0.1.7",
+  "pub_date": "2026-06-06T13:06:26Z",
   "platforms": {
     "linux-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMS9aa0h6NTFoUVRKYTBzWGhIS1ZuZkR6elBscGx1SUFLLzl5Q0xLY1JCTU0wQUdaWE1uVG01QXF2QkF5Rm42a01DaGdwcFR5NERscHZzUUsrOXVKaHFXQXZQekdOMVFBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwNzUwODYwCWZpbGU6UHp5bmNfMC4xLjZfYW1kNjQuZGViCkxneThHWVFGWlFHZmFOSGgrRnNuWGg1Slh6M1FtNDhJYWF2ZU5yTnYyOW4zK2xqS3RWTVo4NEpCUjRhOEdJbU5nSXh0c2o3UG5CdUFBMTFWWnpWTkNRPT0K",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMS9aa0h6NTFoUVhJS2JsOXlqWkZMdFNoaDhOc1NnMkFWZGU2Nkx6Y2N4UCtmZUhnc1VpTlpMcTN4d1BXYU9hdXlFbjNXeXppZHpZd1FiK0FGcWd1QU84Y1AwRzZqRndzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwNzUxMTI5CWZpbGU6UHp5bmNfMC4xLjdfYW1kNjQuZGViCnFSeDRIZzRTbkFrT2VzVjU0aEFDZjNvdWhYZWhUS3dFTHoxUXRFUjhJMkd3eVJ3Ylp1MjVZMU0vM1NXVWRTT0RXWXhiS24xMVk1SmhyQTl3SzYwM0J3PT0K",
       "url": "https://raw.githubusercontent.com/pzynk/desktop/refs/heads/main/release/deb/app.deb"
     },
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMS9aa0h6NTFoUWMxenRmYVhFbXEyRnl0b0hvbnhaSkpPSFI5akxDUk96dlhjdGdoK2ZNeTRiTUJ0UEp2ZkJyTXZlSVp5VGs3RVZoVEtVVGxMc0VkdjZlYVEvS1VvcEFRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwNzUwOTE3CWZpbGU6UHp5bmNfMC4xLjZfeDY0LXNldHVwLmV4ZQp1Wm4rOHhhejljakpzNTgyemZjdkRYTE45UllUNlFmVmh1dENmVmpKWlRTTGc4Nyt6cjc0dTRBQVZlMGhiRXllL2VsNjBDNnRnaWpIQ2ExRWtlWnlDZz09Cg==",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMS9aa0h6NTFoUVlQYXRtamFFbVQralRYaE01b1ZPZHdNaHN1ZlN4RGJ3NUJFakNNU2NNYnJBWDZQVFhzRnVKbzJFbTY2bEhUOCtCZzZoeWtRVGVYN2d5dkZvQnB6WWdzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwNzUxMTg2CWZpbGU6UHp5bmNfMC4xLjdfeDY0LXNldHVwLmV4ZQpwTXV2dUdPendDYkM2a0tWVjJiNG1ZVnI0MWdSZGxxU2RVWHlucTA1MDdhV3gvcUtWU0MwOUhEM1htLzFXK1J1S2Z4Zm9DWVRPajFLNnM1RWtDc3JBZz09Cg==",
       "url": "https://raw.githubusercontent.com/pzynk/desktop/refs/heads/main/release/windows/app.exe"
     }
   }

@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
-import { Wifi } from 'lucide-react'
+import { Wifi, Settings, Rocket, Smartphone } from 'lucide-react'
 import { usePeers } from '../hooks/use-peers'
 import { getBrand } from '../utils/device'
 import { DeviceCard } from '../components/ui/device-card'
@@ -146,7 +146,7 @@ function RouteComponent() {
           </button>
 
           <button className="btn btn-ghost btn-icon" style={{ border: 'none' }} onClick={() => setShowSettings(true)} title="Settings">
-            <span style={{ display: 'flex', alignItems: 'center' }}>⚙️</span>
+            <Settings size={14} strokeWidth={2} />
           </button>
         </div>
       </header>
@@ -172,7 +172,7 @@ function RouteComponent() {
 
               <div>
                 <div style={{ fontSize: 15, fontWeight: 600, color: '#fff', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 16 }}>🚀</span> Update Available
+                  <Rocket size={16} /> Update Available
                 </div>
                 <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                   Version {updateAvailable?.version || ''} is ready to install.
@@ -214,7 +214,7 @@ function RouteComponent() {
           <div className="section">
             {peers.length === 0 ? (
               <div className="empty-state">
-                <div className="empty-state-icon">📱</div>
+                <div className="empty-state-icon"><Smartphone size={36} strokeWidth={1.5} /></div>
                 <div className="empty-state-text">No paired devices yet</div>
                 <div className="empty-state-sub">
                   Open the Pzync app on your Android and scan for this desktop
