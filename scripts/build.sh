@@ -84,14 +84,24 @@ cat <<EOF > release/latest.json
   "platforms": {
     "linux-x86_64": {
       "signature": "$DEB_SIG",
-      "url": "https://raw.githubusercontent.com/pzynk/desktop/refs/heads/main/release/deb/app.deb"
+      "url": "https://github.com/pzynk/desktop/releases/download/v$VERSION/Pzync_${VERSION}_amd64.deb"
     },
     "windows-x86_64": {
       "signature": "$WIN_SIG",
-      "url": "https://raw.githubusercontent.com/pzynk/desktop/refs/heads/main/release/windows/app.exe"
+      "url": "https://github.com/pzynk/desktop/releases/download/v$VERSION/Pzync_${VERSION}_x64-setup.exe"
     }
   }
 }
 EOF
 
-echo "Done! Release artifacts and release/latest.json updated."
+# 7. Git commit and push latest.json
+echo "Committing and pushing latest.json to GitHub..."
+git add release/latest.json
+git commit -m "chore: release v$VERSION"
+git push origin main
+
+# 8. Create GitHub Release and upload binaries
+echo "Creating GitHub Release v$VERSION and uploading binaries..."
+gh release create "v$VERSION" "$DEB_SRC" "$WIN_SRC" --title "v$VERSION" --notes "Release v$VERSION"
+
+echo "Done! Release v$VERSION successfully built, pushed, and published on GitHub!"
