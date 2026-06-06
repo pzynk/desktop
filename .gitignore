@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+.agents
+.junie
+.vite
+.tanstack
+.vscode
