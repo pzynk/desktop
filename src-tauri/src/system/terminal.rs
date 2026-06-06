@@ -835,9 +835,30 @@ fn handle_action(
                 }
                 #[cfg(target_os = "windows")]
                 {
+                    let key_mapping = match k.as_str() {
+                        "Enter" | "Return" => "ENTER".to_string(),
+                        "Escape" | "Esc" => "ESC".to_string(),
+                        "Tab" => "TAB".to_string(),
+                        "Delete" | "Del" => "DELETE".to_string(),
+                        "Backspace" => "BACKSPACE".to_string(),
+                        "Home" => "HOME".to_string(),
+                        "End" => "END".to_string(),
+                        "PageUp" | "PgUp" => "PGUP".to_string(),
+                        "PageDown" | "PgDn" => "PGDN".to_string(),
+                        "ArrowUp" | "Up" => "UP".to_string(),
+                        "ArrowDown" | "Down" => "DOWN".to_string(),
+                        "ArrowLeft" | "Left" => "LEFT".to_string(),
+                        "ArrowRight" | "Right" => "RIGHT".to_string(),
+                        _ => k.clone(),
+                    };
+                    let send_str = if key_mapping.len() == 1 {
+                        format!(r#"[System.Windows.Forms.SendKeys]::SendWait('{}')"#, key_mapping)
+                    } else {
+                        format!(r#"[System.Windows.Forms.SendKeys]::SendWait('{{{}}}')"#, key_mapping)
+                    };
                     let _ = std::process::Command::new("powershell")
                         .arg("-Command")
-                        .arg(format!(r#"[System.Windows.Forms.SendKeys]::SendWait('{{}}{{}}')"#, k, k))
+                        .arg(send_str)
                         .output();
                     format!("✓ Pressed key: {}", k)
                 }

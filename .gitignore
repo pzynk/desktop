@@ -27,3 +27,6 @@ dist-ssr
 .vite
 .tanstack
 .vscode
+# scripts
+scripts/build-win.sh
+scripts/build-deb.sh

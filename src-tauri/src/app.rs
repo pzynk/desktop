@@ -333,7 +333,14 @@ fn send_file_to_device(path_str: &str, device_id: &str, state: &AppState) {
 /// Entry point invoked from `main.rs` (and the mobile entry point).
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default();
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+    }
+
+    builder
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -543,6 +550,8 @@ pub fn run() {
             commands::device::set_device_incoming_files,
             commands::device::set_device_terminal_access,
             commands::device::get_active_transfer,
+            commands::updater::install_update_linux,
+            commands::updater::relaunch_app,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

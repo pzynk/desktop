@@ -28,6 +28,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": [
       "deb",
       "nsis"
@@ -48,6 +49,14 @@
           "flameshot"
         ]
       }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQxNjE5RENGMDc5OUZEQjUKUldTMS9aa0h6NTFoUWQ5Z1lkQmNranZKRUhpd1ZHcnNrdEw3eGY3ZTNjTmVONnJhWDgrd2FCRy8K",
+      "endpoints": [
+        "https://github.com/pzynk/desktop/release/latest.json"
+      ]
     }
   }
 }

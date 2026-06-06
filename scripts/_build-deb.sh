@@ -1,0 +1,3 @@
+export TAURI_SIGNING_PRIVATE_KEY=
+export TAURI_SIGNING_PRIVATE_KEY_PASSWORD=
+npx tauri build

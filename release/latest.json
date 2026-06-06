@@ -1,0 +1,19 @@
+{
+  "version": "0.1.0",
+  "notes": "Release v0.1.0",
+  "pub_date": "2026-06-06T11:16:33Z",
+  "platforms": {
+    "linux-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMS9aa0h6NTFoUVNXelp4ZFQ2RXhaaFJXWnJDd0lidXMxclRJb1RpZkw3RHhWblorVllFTS9yb3NabGlzUzdNbkc5cFh3QmovT2NxTEpVdkpQcVNjN2d4aGdjMlJ0aGdNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwNzQ0NTQ5CWZpbGU6UHp5bmNfMC4xLjBfYW1kNjQuZGViCkVrV3E2Y1A0YVppZDFiT2VmRFhoNStEaEFWWDQ0QmpPcXpWNlFpeEtOaTN1bHJhUm5tV2VhUklqUmJoRmMrNzlTVHZCZmV4TE8zR1pXWUVQUy9aS0N3PT0K",
+      "url": "https://github.com/pzynk/desktop/raw/main/release/deb/app.deb"
+    },
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMS9aa0h6NTFoUVZsMDhDN0t0TEJ5ZUVSYStmb3A5N09oT0NEUUVobUlJS2RPUkN4QW9vOXRKNldZOFowc2xVZ3cyc2krY0prZjRNcFRLcjVlSTY0dmxGcUhlTjZJS1EwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwNzQ0NTkzCWZpbGU6UHp5bmNfMC4xLjBfeDY0LXNldHVwLmV4ZQpaYS8zbXNZMis4cVBMeUFnWDNoUEdKUlZ5WER1dGhQV2ZTcGsvQlpyZG1TeGRtTUVVL21HODFnVWI0bWZOQlh4U1lrc0pBZVZ4VWo5MEhwbXFKeHBCUT09Cg==",
+      "url": "https://github.com/pzynk/desktop/raw/main/release/windows/app.exe"
+    },
+    "darwin-x86_64": {
+      "signature": "",
+      "url": ""
+    }
+  }
+}

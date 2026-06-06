@@ -10,3 +10,4 @@ pub mod discovery;
 pub mod greet;
 pub mod media;
 pub mod pairing;
+pub mod updater;

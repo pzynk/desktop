@@ -1,7 +1,12 @@
+#[cfg(target_os = "linux")]
 use dbus::blocking::Connection;
+#[cfg(target_os = "linux")]
 use dbus::arg::{Variant, RefArg};
+#[cfg(target_os = "linux")]
 use dbus::blocking::stdintf::org_freedesktop_dbus::Properties;
+
 use serde::Serialize;
+#[cfg(target_os = "linux")]
 use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize)]
@@ -16,6 +21,7 @@ pub struct MediaState {
     pub player: String,
 }
 
+#[cfg(target_os = "linux")]
 pub fn get_media_state() -> Option<MediaState> {
     let conn = Connection::new_session().ok()?;
     let proxy = conn.with_proxy("org.freedesktop.DBus", "/", Duration::from_millis(500));
@@ -81,6 +87,12 @@ pub fn get_media_state() -> Option<MediaState> {
     })
 }
 
+#[cfg(not(target_os = "linux"))]
+pub fn get_media_state() -> Option<MediaState> {
+    None
+}
+
+#[cfg(target_os = "linux")]
 pub fn send_media_command(command: &str, value: Option<f64>) -> Result<(), String> {
     let conn = Connection::new_session().map_err(|e| e.to_string())?;
     let proxy = conn.with_proxy("org.freedesktop.DBus", "/", Duration::from_millis(500));
@@ -151,6 +163,12 @@ pub fn send_media_command(command: &str, value: Option<f64>) -> Result<(), Strin
     Ok(())
 }
 
+#[cfg(not(target_os = "linux"))]
+pub fn send_media_command(_command: &str, _value: Option<f64>) -> Result<(), String> {
+    Err("Media commands are not supported on this platform".to_string())
+}
+
+#[cfg(target_os = "linux")]
 pub fn get_system_volume() -> Option<(f64, bool)> {
     use std::process::Command;
     let output = Command::new("amixer")
@@ -190,6 +208,12 @@ pub fn get_system_volume() -> Option<(f64, bool)> {
     }
 }
 
+#[cfg(not(target_os = "linux"))]
+pub fn get_system_volume() -> Option<(f64, bool)> {
+    None
+}
+
+#[cfg(target_os = "linux")]
 pub fn set_system_volume(volume: f64) -> Result<(), String> {
     use std::process::Command;
     let pct = (volume * 100.0).round() as i32;
@@ -204,6 +228,7 @@ pub fn set_system_volume(volume: f64) -> Result<(), String> {
     }
 }
 
+#[cfg(target_os = "linux")]
 pub fn adjust_system_volume(up: bool) -> Result<(), String> {
     use std::process::Command;
     let arg = if up { "5%+" } else { "5%-" };
