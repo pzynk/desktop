@@ -8,12 +8,12 @@ Sync connects your computer and Android device seamlessly over the local network
 
 ## Key Features
 
-- 📱 **Local P2P Discovery & Pairing**: Automatically discovers and securely pairs with Android devices over local Wi-Fi using UDP broadcasting (port `8200`) and TCP listeners (port `8080`).
-- 📋 **Universal Clipboard**: Automatically synchronizes clipboard text and copied files between your desktop and Android device in real time.
-- 📁 **Seamless File Transfers**: Send and receive files directly to/from the system's `Downloads` folder, featuring a visual transfer progress ring in the system tray.
-- 🎵 **Media & Volume Control**: Check currently playing media and control playback or synchronize master volume levels from your mobile device.
-- 💻 **Secure Terminal Access**: Run secure remote terminal commands directly from paired mobile devices.
-- ⚙️ **Autostart & System Tray Integration**: Run silently in the background with a native tray menu, or configure the app to run minimized at startup.
+- **Local P2P Discovery & Pairing**: Automatically discovers and securely pairs with Android devices over local Wi-Fi using UDP broadcasting (port `8200`) and TCP listeners (port `8080`).
+- **Universal Clipboard**: Automatically synchronizes clipboard text and copied files between your desktop and Android device in real time.
+- **Seamless File Transfers**: Send and receive files directly to/from the system's `Downloads` folder, featuring a visual transfer progress ring in the system tray.
+- **Media & Volume Control**: Check currently playing media and control playback or synchronize master volume levels from your mobile device.
+- **Secure Terminal Access**: Run secure remote terminal commands directly from paired mobile devices.
+- **Autostart & System Tray Integration**: Run silently in the background with a native tray menu, or configure the app to run minimized at startup.
 
 ---
 
