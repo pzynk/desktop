@@ -42,7 +42,6 @@
           "scrot",
           "xdotool",
           "wmctrl",
-          "gnome-screenshot",
           "flameshot"
         ]
       }
