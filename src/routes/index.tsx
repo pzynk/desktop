@@ -1,11 +1,12 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
-import { Wifi, Box } from 'lucide-react'
+import { Wifi } from 'lucide-react'
 import { usePeers } from '../hooks/use-peers'
 import { getBrand } from '../utils/device'
 import { DeviceCard } from '../components/ui/device-card'
 import { SettingsModal } from '../components/layout/settings-modal'
 import { PairModal } from '../components/layout/pair-modal'
+import logo from '../assets/logo.png'
 
 export const Route = createFileRoute('/')({
   component: RouteComponent,
@@ -31,8 +32,8 @@ function RouteComponent() {
       <header className="top-bar">
         <div className="top-bar-left">
           <div className="top-bar-logo">
-            <Box size={20} strokeWidth={2.5} style={{ marginRight: 4 }} />
-            <span className="top-bar-logo-text">Sync</span>
+            <img src={logo} alt="Pzync Logo" style={{ width: 20, height: 20, marginRight: 6, objectFit: 'contain' }} />
+            <span className="top-bar-logo-text">Pzync</span>
           </div>
         </div>
 
@@ -82,7 +83,6 @@ function RouteComponent() {
           </button>
 
           <button className="btn btn-ghost btn-icon" style={{ border: 'none' }} onClick={() => setShowSettings(true)} title="Settings">
-            <Box size={16} style={{ display: 'none' }} /> {/* dummy just to keep layout if needed, or simply render standard layout */}
             <span style={{ display: 'flex', alignItems: 'center' }}>⚙️</span>
           </button>
         </div>
@@ -105,7 +105,7 @@ function RouteComponent() {
                 <div className="empty-state-icon">📱</div>
                 <div className="empty-state-text">No paired devices yet</div>
                 <div className="empty-state-sub">
-                  Open the Sync app on your Android and scan for this desktop
+                  Open the Pzync app on your Android and scan for this desktop
                 </div>
               </div>
             ) : (
