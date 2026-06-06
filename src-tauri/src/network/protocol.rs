@@ -33,6 +33,7 @@ pub enum ClientMessage {
         filename: String,
         total_bytes: u64,
     },
+    Unpair,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -70,6 +71,7 @@ pub enum ServerMessage {
         username: String,
         password: Option<String>,
     },
+    Unpair,
 }
 
 pub fn read_line_json<T: DeserializeOwned>(reader: &mut impl BufRead) -> Result<Option<T>, String> {

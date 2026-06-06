@@ -389,11 +389,11 @@ pub fn run() {
                     // 1. Text polling
                     if let Ok(text) = clipboard_ctx.get_text() {
                         let mut last = last_clipboard_clone.lock().unwrap();
-                        if text != *last && !text.is_empty() {
+                        let normalized_text = text.replace("\r\n", "\n");
+                        let normalized_last = last.replace("\r\n", "\n");
+                        if normalized_text != normalized_last && !text.is_empty() {
                             *last = text.clone();
-                            if let Ok(payload) = serde_json::to_string(&text) {
-                                let _ = app_handle.emit("desktop-clipboard-update", payload);
-                            }
+                            let _ = app_handle.emit("desktop-clipboard-update", &text);
                         }
                     }
                     

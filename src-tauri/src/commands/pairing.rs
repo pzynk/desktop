@@ -70,11 +70,23 @@ pub async fn unpair_peer(
         .lock()
         .expect("trusted peers mutex poisoned")
         .remove(&device_id)?;
+
+    // Send Unpair message to peer if connected
+    {
+        let mut active_streams = state.active_streams.lock().unwrap();
+        if let Some(mut stream) = active_streams.remove(&device_id) {
+            let msg = crate::network::protocol::ServerMessage::Unpair;
+            let _ = crate::network::protocol::write_line_json(&mut stream, &msg);
+            let _ = stream.shutdown(std::net::Shutdown::Both);
+        }
+    }
+
     state
         .active_connections
         .lock()
         .expect("active connections mutex poisoned")
         .remove(&device_id);
+
     app.emit(PEERS_CHANGED_EVENT, ()).ok();
     refresh_tray_menu(&app).ok();
     Ok(())

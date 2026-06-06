@@ -459,8 +459,20 @@ fn keep_session_open(
                         "[tcp] Received clipboard update from peer: {} bytes",
                         text.len()
                     );
+                    let clipboard = ctx.app.clipboard();
+                    let _ = clipboard.write_text(text.clone());
+                    
+                    // Wait up to 200ms for the clipboard to register the update to prevent feedback loop
+                    let start = std::time::Instant::now();
+                    while start.elapsed() < Duration::from_millis(200) {
+                        if let Ok(curr) = clipboard.read_text() {
+                            if curr.replace("\r\n", "\n") == text.replace("\r\n", "\n") {
+                                break;
+                            }
+                        }
+                        std::thread::sleep(Duration::from_millis(10));
+                    }
                     *ctx.last_clipboard.lock().unwrap() = text.clone();
-                    let _ = ctx.app.clipboard().write_text(text.clone());
                 } else {
                     println!("[tcp] Ignored clipboard update from peer (sync disabled)");
                 }
@@ -533,6 +545,13 @@ fn keep_session_open(
                 let _ = refresh_tray_menu(&ctx.app);
                 let _ = ctx.app.emit("file-transfer-finished", &peer_device_id);
                 restore_default_tray_icon(&ctx.app);
+            }
+            Ok(ClientMessage::Unpair) => {
+                println!("[tcp] Received Unpair request from peer");
+                let _ = ctx.trusted_peers.lock().unwrap().remove(&peer_device_id);
+                let _ = ctx.app.emit(PEERS_CHANGED_EVENT, ());
+                let _ = refresh_tray_menu(&ctx.app);
+                break Ok(());
             }
             Ok(_) => println!("[tcp] Authenticated session payload: {}", line.trim()),
             Err(e) => println!(
