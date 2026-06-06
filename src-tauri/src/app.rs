@@ -341,6 +341,7 @@ pub fn run() {
     }
 
     builder
+        .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
