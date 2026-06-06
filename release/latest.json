@@ -1,14 +1,14 @@
 {
   "version": "0.1.1",
   "notes": "Release v0.1.1",
-  "pub_date": "2026-06-06T11:42:45Z",
+  "pub_date": "2026-06-06T11:52:36Z",
   "platforms": {
     "linux-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMS9aa0h6NTFoUWVDcHhudkwrOFVVYkFkcUtENUZEQ01kcXpGWCtRdy9KYmRaRVFaRHZzN1dXQlhid2JMcVg3VGlRTVNMdDk4UmdRZnFUZnF2KysvRmxuaGpiV2xTV1FzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwNzQ2MTIxCWZpbGU6UHp5bmNfMC4xLjFfYW1kNjQuZGViCjZ1VDB0ZlQwSFlUVnFxYytYa1o3TWRSTWJSc2diMXhIVkgrS1dsTlBkdXF2T3dyQnN2NGdoK2s5KzdOU3J1M0JSRWJWcmpjczJIMzZ5aEorQ0luK0R3PT0K",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMS9aa0h6NTFoUVZoYUpCSHQ2bitNbC9VZHdyMkdvQmtXdmhjdVFkMVRNdmdYaThaWXpTVE5RVXZTTHg1MTlmRmpkcSsxd3pIVjFSd3ltWm5CL2I0c2VVTWhLc3VaTVFRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwNzQ2Njg1CWZpbGU6UHp5bmNfMC4xLjFfYW1kNjQuZGViCjBCZkhWVXhMekVqWXZtQUp0QlhhTExmWksraFhoZnNiY0lPd2pKNVVYd3Y3YmhXNFhMeEhsaklnZWFlOEh2citPaTg5R2FZSWt0emxqNjV2SjlXc0RnPT0K",
       "url": "https://github.com/pzynk/desktop/raw/main/release/deb/app.deb"
     },
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMS9aa0h6NTFoUVVNVTA4bjBTQUdaMCtSTnpIS3B6ZUJzZENEeU1PVEd0eEtqMlp1VTBiWGZjbmUrSVhvQ1YyMllLYk5maGlDSmFqbndmM2VKZXByNis5UmFPSmZBc1FNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwNzQ2MTY1CWZpbGU6UHp5bmNfMC4xLjFfeDY0LXNldHVwLmV4ZQowL3hvREhkdDY4V015OFNsNEI3cmdURGh1dmtMZVIybWM3Wk1CNGZDZXNrc3E1YUh1TFVDLzhCRERabzlDTVRVamx5bURaaFFZY2FLcnJhR1ZpRzVEdz09Cg==",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMS9aa0h6NTFoUVhXUEdXdE1BM0xSUXpIcXpLQlhjUFN4SzhUTkpMZ0U1S1BHZlBVRXI2NjEwM1FRclpkanBGTlhWTkpYaGo4K2FnNnFVWWRRM01OTFJFWkY5enV5Y2dvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwNzQ2NzU2CWZpbGU6UHp5bmNfMC4xLjFfeDY0LXNldHVwLmV4ZQpzTENhMkNyNjZ4cXlyL2hVZVhLTUhqYlF1ZDVWS0F3NTdXRDdRQ01JZGhsUndLVjJNcWlsUkRyMFEyb1hmM202QnBQZ2pENDR4QkVWamRhYjJSKzRBdz09Cg==",
       "url": "https://github.com/pzynk/desktop/raw/main/release/windows/app.exe"
     },
     "darwin-x86_64": {
