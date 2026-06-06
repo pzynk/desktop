@@ -89,10 +89,6 @@ cat <<EOF > release/latest.json
     "windows-x86_64": {
       "signature": "$WIN_SIG",
       "url": "https://raw.githubusercontent.com/pzynk/desktop/refs/heads/main/release/windows/app.exe"
-    },
-    "darwin-x86_64": {
-      "signature": "",
-      "url": ""
     }
   }
 }

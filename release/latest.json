@@ -10,10 +10,6 @@
     "windows-x86_64": {
       "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMS9aa0h6NTFoUWRKZXpyNTg0ZmZ2N01hWjFYYnBhR2NlRHIrdnovV0ZDU1M0T081MS9tSU1YSkFnQkUrSW56RzZSckxodk5seGo1K2Fxb1l2MFMzUWFpTk1Oby94aXdVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwNzQ4NTU3CWZpbGU6UHp5bmNfMC4xLjNfeDY0LXNldHVwLmV4ZQpMSHRvN3A1MGZrL0VOMHZST1dvSmZqb2E0MzZQMFBCRDZBR2xKL2xXVUlUODM5QTcxSEFScTMzcWpmUkdRdzNjekxETXNiSXdVS1hsNXpBZkhJd3JDQT09Cg==",
       "url": "https://raw.githubusercontent.com/pzynk/desktop/refs/heads/main/release/windows/app.exe"
-    },
-    "darwin-x86_64": {
-      "signature": "",
-      "url": ""
     }
   }
 }
