@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
 import { invoke } from '@tauri-apps/api/core'
+import { getVersion } from '@tauri-apps/api/app'
 
 interface SettingsModalProps {
   onClose: () => void
@@ -9,10 +10,12 @@ interface SettingsModalProps {
 export function SettingsModal({ onClose }: SettingsModalProps) {
   const [ip, setIp] = useState<string | null>(null)
   const [name, setName] = useState<string | null>(null)
+  const [version, setVersion] = useState<string>('…')
 
   useEffect(() => {
     invoke<string>('get_device_ip').then(setIp).catch(() => {})
     invoke<string>('get_device_name').then(setName).catch(() => {})
+    getVersion().then(setVersion).catch(() => {})
   }, [])
 
   return (
@@ -40,7 +43,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
               { label: 'Local IP', value: ip ?? '…' },
               { label: 'Discovery Port', value: '7890' },
               { label: 'TCP Port', value: '7891' },
-              { label: 'Version', value: '0.1.0' },
+              { label: 'Version', value: version },
               { label: 'Protocol', value: 'TCP + UDP Discovery' },
             ].map((row, i, arr) => (
               <div key={row.label} style={{

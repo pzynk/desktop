@@ -18,7 +18,8 @@ function RouteComponent() {
   const navigate = useNavigate({ from: Route.fullPath })
   const [showSettings, setShowSettings] = useState(false)
   const [updateAvailable, setUpdateAvailable] = useState<any>(null)
-  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'updating' | 'error'>('idle')
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'updating' | 'installing' | 'error'>('idle')
+  const [downloadProgress, setDownloadProgress] = useState(0)
 
   useEffect(() => {
     const checkUpdates = async () => {
@@ -41,28 +42,37 @@ function RouteComponent() {
     if (!updateAvailable) return
     try {
       setUpdateStatus('updating')
-      const isLinux = navigator.userAgent.toLowerCase().includes('linux')
-      if (isLinux) {
-        // Fetch the updater manifest to get the download URL
-        const res = await fetch('https://github.com/pzynk/desktop/raw/main/release/latest.json')
-        const manifest = await res.json()
-        const url = manifest.platforms['linux-x86_64']?.url
-        if (!url) {
-          throw new Error('Linux update URL not found in manifest')
+      setDownloadProgress(0)
+
+      let total = 0
+      let downloaded = 0
+
+      await updateAvailable.downloadAndInstall((p: any) => {
+        if (p.event === 'Started') {
+          total = p.data.contentLength || 0
+        } else if (p.event === 'Progress') {
+          let length = p.data.chunkLength || 0
+          downloaded += length
+          if (total > 0) {
+            let percentage = Math.round((downloaded / total) * 100)
+            setDownloadProgress(percentage)
+          }
+        } else if (p.event === 'Finished') {
+          setDownloadProgress(100)
+          setUpdateStatus('installing')
         }
-        // Invoke custom command to download and install debian package via pkexec
-        await invoke('install_update_linux', { url })
-      } else {
-        // Standard Tauri updater for Windows/macOS
-        await updateAvailable.downloadAndInstall()
+      })
+
+      try {
+        await invoke('relaunch_app')
+      } catch (error: any) {
+        console.error('Failed to relaunch:', error?.message || 'Unknown error')
+        throw error
       }
-      
-      // Relaunch the app to apply the update
-      await invoke('relaunch_app')
-    } catch (err) {
-      console.error('Update failed:', err)
+    } catch (error: any) {
+      console.error('Update failed:', error?.message || 'Unknown error')
       setUpdateStatus('error')
-      alert(`Update failed: ${err instanceof Error ? err.message : String(err)}`)
+      alert(`Update failed: ${error?.message || 'Unknown error'}`)
     }
   }
 
@@ -89,45 +99,7 @@ function RouteComponent() {
         </div>
 
         <div className="top-bar-right">
-          {updateStatus === 'updating' ? (
-            <span style={{
-              fontSize: 12,
-              color: 'var(--accent)',
-              marginRight: 12,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              background: 'rgba(6, 182, 212, 0.1)',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              border: '1px solid var(--accent)'
-            }}>
-              <span className="animate-pulse" style={{
-                width: 6,
-                height: 6,
-                borderRadius: '50%',
-                background: 'var(--accent)',
-                display: 'inline-block'
-              }} />
-              Updating...
-            </span>
-          ) : updateAvailable ? (
-            <button
-              onClick={handleUpdate}
-              className="btn btn-primary"
-              style={{
-                padding: '4px 10px',
-                fontSize: 11,
-                marginRight: 12,
-                height: 26,
-                background: 'var(--accent)',
-                borderColor: 'var(--accent)',
-                cursor: 'pointer'
-              }}
-            >
-              Update to v{updateAvailable.version}
-            </button>
-          ) : null}
+          {/* Update UI has been moved to a banner below the header */}
 
           {/* iOS-Style Toggle Switch */}
           <button
@@ -182,6 +154,55 @@ function RouteComponent() {
       {/* ─── Main Content ─────────────────── */}
       <main className="main-content">
         <div className="dashboard-wrap">
+          {/* ─── Update Banner ─────────────────── */}
+          {(updateAvailable || updateStatus === 'updating') && (
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(6,182,212,0.08) 0%, rgba(180,142,247,0.04) 100%)',
+              border: '1px solid rgba(6,182,212,0.2)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '16px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+              position: 'relative',
+              overflow: 'hidden'
+            }}>
+              <div style={{ position: 'absolute', top: -40, right: -40, width: 100, height: 100, background: 'var(--accent)', filter: 'blur(50px)', opacity: 0.15, pointerEvents: 'none' }} />
+
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: '#fff', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 16 }}>🚀</span> Update Available
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                  Version {updateAvailable?.version || ''} is ready to install.
+                </div>
+              </div>
+
+              {updateStatus === 'updating' || updateStatus === 'installing' ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--accent)', background: 'rgba(6,182,212,0.1)', padding: '6px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(6,182,212,0.2)' }}>
+                    <span className="progress-spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />
+                    {updateStatus === 'updating' ? `Downloading... ${downloadProgress}%` : 'Installing...'}
+                  </div>
+                  {updateStatus === 'updating' && (
+                    <div style={{ width: '100%', height: 4, background: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${downloadProgress}%`, background: 'var(--accent)', transition: 'width 0.2s' }} />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <button
+                  onClick={handleUpdate}
+                  className="btn btn-primary"
+                  style={{ padding: '8px 16px', background: 'var(--accent)', color: 'var(--bg-base)', border: 'none' }}
+                >
+                  Install Update
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Header */}
           <div className="page-header" style={{ marginBottom: 12 }}>
             <div>
