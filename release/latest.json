@@ -1,15 +1,15 @@
 {
-  "version": "0.1.8",
-  "notes": "Release v0.1.8",
-  "pub_date": "2026-06-06T13:19:13Z",
+  "version": "0.1.9",
+  "notes": "Release v0.1.9",
+  "pub_date": "2026-06-06T14:06:36Z",
   "platforms": {
     "linux-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMS9aa0h6NTFoUWRwR3M1TWQvbTVRMVR3TmtRSWNEUXljRzdoSWZFMWVhYjlsWFZqNFRKakxlZjBOdEtWQVVwdkh0NmpXRkVtQ0o1RzRxY3hqRnFwVWtyWHZ3STdKQUEwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwNzUxODk3CWZpbGU6UHp5bmNfMC4xLjhfYW1kNjQuZGViCjR5eHdWVWFHUkJOOEUwTUJTTGhoaWxnZXB3TDU5WEFkYktZTVJYZFQ5V052ZjRUUGRuMHJ6ekY4NjFwM0lYOUhKRTlrRmNINVlBVVlSOTh1ZSsrUkRnPT0K",
-      "url": "https://github.com/pzynk/desktop/releases/download/v0.1.8/Pzync_0.1.8_amd64.deb"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMS9aa0h6NTFoUVNtbEZ2S0RDZzNLbGJTVmNQVU9zK0N1TWxEUUVSYWdodGNsWis1aUZoTFBkelYxbWs2S1A0aGh1STRGRStZYVM5Nkt1ejROYjZNa1YvdjN2Umx5VndFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwNzU0NzM1CWZpbGU6UHp5bmNfMC4xLjlfYW1kNjQuZGViCmJKSCtaZGMwZGNYdjhuYzRydmJOc1VjSGlJZ1VSeU5xTnZOdUVGQVE1eUV3QkN4blFsTmhNNGR1TXVyNld6ejlIYVhTUFZKaVdqOU85WjIrRWJ5NEJRPT0K",
+      "url": "https://github.com/pzynk/desktop/releases/download/v0.1.9/Pzync_0.1.9_amd64.deb"
     },
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMS9aa0h6NTFoUVJLd0hCNGh6RGVuUVJoa2JWTVlsKzNsL3ovZ05PY1pmSStUdTJFMkI5dG4wdXFhMTJjVEJqMEl2dGx4VDl3T0Zydkhjd2liNUZCSWFmTmlqZ2pFMnc4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwNzUxOTUzCWZpbGU6UHp5bmNfMC4xLjhfeDY0LXNldHVwLmV4ZQpZcTNVYjh1WDFSQTRJcUY1T0hzeW5seW1BWXNPL3N6ZTJ3VE56UW1KZmRTekozV3QvUm5vTFFsdVJmMkJleUtRZVVjNWMrNjFTcjZvOGJvd0R1QklEUT09Cg==",
-      "url": "https://github.com/pzynk/desktop/releases/download/v0.1.8/Pzync_0.1.8_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMS9aa0h6NTFoUVRWdFNjcHBwYXBVV3VSMWFxLzdzbThvd1VhMWRDejBpRzRucExYVnoxaHM0SHZXbTRxOTBLVEFiQS9GYzNXbmZOd1duZ01CK2J3VXRiVHB1SkFOK2dZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwNzU0Nzk1CWZpbGU6UHp5bmNfMC4xLjlfeDY0LXNldHVwLmV4ZQpwaHZ1N2JLMUlJa2JFR3kxdy9CaHZrNVIxN0taRHpLYTk5cVo3UDlPb0Q5TWxCcHYrT0hReHJ1WGI3RFZjTEtMR0RNTnFsK0czQVlPSCtkNURyTjNBUT09Cg==",
+      "url": "https://github.com/pzynk/desktop/releases/download/v0.1.9/Pzync_0.1.9_x64-setup.exe"
     }
   }
 }
