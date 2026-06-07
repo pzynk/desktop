@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+git add .
+
+# Get staged files
+staged_status=$(git diff --staged --name-status)
+staged_files=$(git diff --staged --name-only)
+
+if [ -z "${staged_files// /}" ]; then
+	git pull origin main
+	echo "No changes to commit."
+	exit 0
+fi
+
+# Determine scopes
+scopes_arr=()
+[[ $(echo "$staged_files" | grep -E '^src/types/' || true) ]] && scopes_arr+=(types)
+[[ $(echo "$staged_files" | grep -E '^src/components/ui/' || true) ]] && scopes_arr+=(ui)
+[[ $(echo "$staged_files" | grep -E '^src/components/pages/' || true) ]] && scopes_arr+=(pages)
+[[ $(echo "$staged_files" | grep -E '^src/components/' || true) ]] && scopes_arr+=(components)
+[[ $(echo "$staged_files" | grep -E '^src/api/' || true) ]] && scopes_arr+=(api)
+[[ $(echo "$staged_files" | grep -E '\.css$' || true) ]] && scopes_arr+=(styles)
+[[ $(echo "$staged_files" | grep -E '^src/lib/|^src/providers/|^src/context' || true) ]] && scopes_arr+=(lib)
+[[ $(echo "$staged_files" | grep -E '^src/' || true) ]] && scopes_arr+=(src)
+
+# Deduplicate scopes
+scopes=$(printf "%s\n" "${scopes_arr[@]}" | awk '!x[$0]++' | paste -sd"," -)
+[ -z "$scopes" ] && scopes="repo"
+
+# Choose type
+type="chore"
+if echo "$staged_files" | grep -qE '^src/(components|api|pages|lib|providers)'; then
+	type="feat"
+fi
+if echo "$staged_files" | grep -qE '\.css$|\.scss$'; then
+	type="style"
+fi
+if echo "$staged_status" | grep -qE '^D'; then
+	type="refactor"
+fi
+
+# Generate short smart message
+first_file=$(echo "$staged_files" | head -n1 | sed 's#^src/##')
+num_files=$(echo "$staged_files" | wc -l | tr -d ' ')
+
+if [ "$num_files" -eq 1 ]; then
+	action_word="update"
+	[[ "$type" == "feat" ]] && action_word="add"
+	[[ "$type" == "refactor" ]] && action_word="remove"
+	title="$type($scopes): $action_word ${first_file%.*}"
+else
+	main_dir=$(echo "$first_file" | cut -d'/' -f1)
+	title="$type($scopes): modify $main_dir and $((num_files - 1)) more files"
+fi
+
+# Create commit
+echo "Committing with message:"
+echo "$title"
+git commit -m "$title"
+git push origin main

@@ -411,7 +411,7 @@ function DeviceRoute() {
                         <div style={{ fontSize: '12.5px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
                           {isWindows ? (
                             <>
-                              Available in Zoom, Meet, and other platforms as <code style={{ background: 'var(--bg-elevated)', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', color: 'var(--accent)' }}>OBS Virtual Camera</code>.
+                              Available in Zoom, Meet, and other platforms as <code style={{ background: 'var(--bg-elevated)', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', color: 'var(--accent)' }}>Sync Camera</code>.
                             </>
                           ) : (
                             <>
@@ -460,48 +460,16 @@ function DeviceRoute() {
                           fontSize: '12.5px'
                         }}>
                           <div style={{ fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                            To make this camera available in Zoom, Meet, and other apps on Windows:
+                            To make this camera available in Zoom, Meet, and other apps:
                           </div>
                           <ol style={{ paddingLeft: '20px', margin: '0 0 12px 0', color: 'var(--text-tertiary)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            <li>Make sure <strong>OBS Studio</strong> (v26.0 or newer) is installed on your PC. You can download it from <a href="https://obsproject.com" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>obsproject.com</a>.</li>
-                            <li>If OBS is installed but the virtual camera still fails, you may need to register the driver. Open a Command Prompt as <strong>Administrator</strong> and run:
-                              <div style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                background: 'var(--bg-base)',
-                                padding: '6px 10px',
-                                borderRadius: '4px',
-                                marginTop: '4px',
-                                fontFamily: 'monospace',
-                                fontSize: '11px',
-                                color: 'var(--accent)',
-                                border: '1px solid var(--border)',
-                                overflowX: 'auto',
-                                whiteSpace: 'pre'
-                              }}>
-                                cd "C:\Program Files\obs-studio\data\obs-plugins\win-dshow"
-                              </div>
-                              <div style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                background: 'var(--bg-base)',
-                                padding: '6px 10px',
-                                borderRadius: '4px',
-                                marginTop: '4px',
-                                fontFamily: 'monospace',
-                                fontSize: '11px',
-                                color: 'var(--accent)',
-                                border: '1px solid var(--border)',
-                                overflowX: 'auto',
-                                whiteSpace: 'pre'
-                              }}>
-                                virtualcam-install.bat
-                              </div>
-                            </li>
-                            <li>Restart your computer, then select <strong>OBS Virtual Camera</strong> as the video source in your video conferencing application.</li>
+                            <li>Ensure that you approve the <strong>Administrator / UAC</strong> prompt when enabling the camera stream so the driver can register.</li>
+                            <li>If the driver fails to load, try turning the camera stream switch <strong>Off</strong> and <strong>On</strong> again to retry registration.</li>
+                            <li>Restart your video conferencing application (or your computer) to refresh the available camera list.</li>
+                            <li>Select <strong>Sync Camera</strong> as the video source in your application.</li>
                           </ol>
                           <div style={{ color: 'var(--text-tertiary)', fontSize: '11.5px', fontStyle: 'italic' }}>
-                            Note: Once you register the driver, turn this stream Off and back On.
+                            Note: The driver is registered locally as a secure DirectShow filter named "Sync Camera".
                           </div>
                         </div>
                       ) : isMac ? (

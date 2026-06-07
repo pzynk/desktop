@@ -561,13 +561,34 @@ fn is_windows_driver_registered() -> bool {
 }
 
 #[cfg(target_os = "windows")]
+fn is_windows_driver_renamed() -> bool {
+    let output = create_command("reg")
+        .args(&[
+            "query",
+            "HKLM\\SOFTWARE\\Classes\\CLSID\\{860BB310-5D01-11d0-BD3B-00A0C911CE86}\\Instance\\{A3FCE0F5-3493-419F-958A-ABA1250EC20B}",
+            "/v",
+            "FriendlyName",
+        ])
+        .output();
+
+    if let Ok(out) = output {
+        if out.status.success() {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            return stdout.contains("Sync Camera");
+        }
+    }
+    false
+}
+
+#[cfg(target_os = "windows")]
 fn prepare_windows_driver(app: &tauri::AppHandle) -> Result<(), String> {
-    if is_windows_driver_registered() {
-        println!("[camera] OBS Virtual Camera driver is already registered.");
+    let registered = is_windows_driver_registered();
+    let renamed = is_windows_driver_renamed();
+
+    if registered && renamed {
+        println!("[camera] Sync Camera driver is registered and properly named.");
         return Ok(());
     }
-
-    println!("[camera] OBS Virtual Camera driver not found. Attempting to register bundled DLL...");
 
     use tauri::path::BaseDirectory;
     let dll_path = app
@@ -577,33 +598,59 @@ fn prepare_windows_driver(app: &tauri::AppHandle) -> Result<(), String> {
 
     if !dll_path.exists() {
         return Err(format!(
-            "Bundled obs-virtualcam-module64.dll not found at resource path: {:?}",
+            "Bundled virtual camera module not found at resource path: {:?}",
             dll_path
         ));
     }
 
-    println!("[camera] Launching elevated regsvr32 for DLL: {:?}", dll_path);
-    
+    if !registered {
+        println!("[camera] Virtual camera driver not registered. Registering and naming...");
+    } else {
+        println!("[camera] Virtual camera driver registered but not named. Naming...");
+    }
+
+    let register_cmd = if !registered {
+        format!("regsvr32 /s \"{}\"; ", dll_path.to_string_lossy())
+    } else {
+        "".to_string()
+    };
+
+    let script = format!(
+        "{}reg add \"HKLM\\SOFTWARE\\Classes\\CLSID\\{{A3FCE0F5-3493-419F-958A-ABA1250EC20B}}\" /ve /d \"Sync Camera\" /f; \
+         reg add \"HKLM\\SOFTWARE\\Classes\\CLSID\\{{860BB310-5D01-11d0-BD3B-00A0C911CE86}}\\Instance\\{{A3FCE0F5-3493-419F-958A-ABA1250EC20B}}\" /v \"FriendlyName\" /d \"Sync Camera\" /f; \
+         reg add \"HKLM\\SOFTWARE\\Classes\\CLSID\\{{860BB310-5D01-11d0-BD3B-00A0C911CE86}}\\Instance\\{{A3FCE0F5-3493-419F-958A-ABA1250EC20B}}\" /ve /d \"Sync Camera\" /f; \
+         reg add \"HKLM\\SOFTWARE\\Classes\\WOW6432Node\\CLSID\\{{A3FCE0F5-3493-419F-958A-ABA1250EC20B}}\" /ve /d \"Sync Camera\" /f; \
+         reg add \"HKLM\\SOFTWARE\\Classes\\WOW6432Node\\CLSID\\{{860BB310-5D01-11d0-BD3B-00A0C911CE86}}\\Instance\\{{A3FCE0F5-3493-419F-958A-ABA1250EC20B}}\" /v \"FriendlyName\" /d \"Sync Camera\" /f; \
+         reg add \"HKLM\\SOFTWARE\\Classes\\WOW6432Node\\CLSID\\{{860BB310-5D01-11d0-BD3B-00A0C911CE86}}\\Instance\\{{A3FCE0F5-3493-419F-958A-ABA1250EC20B}}\" /ve /d \"Sync Camera\" /f",
+        register_cmd
+    );
+
+    println!("[camera] Launching elevated script: {}", script);
+
     let status = create_command("powershell")
         .args(&[
             "-Command",
             &format!(
-                "Start-Process regsvr32 -ArgumentList '/s \"{}\"' -Verb RunAs -Wait",
-                dll_path.to_string_lossy()
+                "Start-Process powershell -ArgumentList '-NoProfile -Command \"{}\"' -Verb RunAs -Wait",
+                script
             ),
         ])
         .status()
         .map_err(|e| format!("Failed to launch elevated registration: {e}"))?;
 
     if !status.success() {
-        return Err("Registration failed or was cancelled by the user.".into());
+        return Err("Registration/renaming failed or was cancelled by the user.".into());
     }
 
     if !is_windows_driver_registered() {
         return Err("DLL registration command completed, but class registry check still failed.".into());
     }
 
-    println!("[camera] OBS Virtual Camera driver registered successfully!");
+    if !is_windows_driver_renamed() {
+        return Err("DLL registered successfully, but naming registry check failed.".into());
+    }
+
+    println!("[camera] Virtual camera driver registered and named 'Sync Camera' successfully!");
     Ok(())
 }
 
