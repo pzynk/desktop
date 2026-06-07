@@ -22,11 +22,25 @@ pub async fn toggle_camera_stream(
     }
 }
 
+fn create_command(program: &str) -> std::process::Command {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        let mut cmd = std::process::Command::new(program);
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        cmd
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        std::process::Command::new(program)
+    }
+}
+
 fn find_adb_path() -> String {
     let adb_name = if cfg!(target_os = "windows") { "adb.exe" } else { "adb" };
 
     // 1. Try raw "adb" in PATH
-    if std::process::Command::new(adb_name).arg("--version").output().is_ok() {
+    if create_command(adb_name).arg("--version").output().is_ok() {
         return adb_name.to_string();
     }
 
@@ -77,7 +91,7 @@ pub async fn start_virtual_camera(
     if use_adb {
         let adb_cmd = find_adb_path();
         println!("[camera] Setting up ADB port forwarding: {} forward tcp:40000 tcp:{}", adb_cmd, port);
-        let output = std::process::Command::new(&adb_cmd)
+        let output = create_command(&adb_cmd)
             .args(&["forward", "tcp:40000", &format!("tcp:{}", port)])
             .output();
         match output {
@@ -243,7 +257,7 @@ pub async fn start_virtual_camera(
         if use_adb {
             let adb_cmd = find_adb_path();
             println!("[camera] Removing ADB port forwarding: {} forward --remove tcp:40000", adb_cmd);
-            let _ = std::process::Command::new(&adb_cmd)
+            let _ = create_command(&adb_cmd)
                 .args(&["forward", "--remove", "tcp:40000"])
                 .output();
         }
@@ -506,7 +520,7 @@ fn rgb_to_yuyv(rgb: &[u8], yuyv: &mut [u8]) {
 fn prepare_linux_driver() -> Result<(), String> {
     if !std::path::Path::new("/dev/video9").exists() {
         println!("[camera] /dev/video9 does not exist. Loading v4l2loopback module...");
-        let status = std::process::Command::new("pkexec")
+        let status = create_command("pkexec")
             .args(&["modprobe", "v4l2loopback", "exclusive_caps=1", "card_label=Sync Camera", "video_nr=9"])
             .status()
             .map_err(|e| format!("Failed to run pkexec modprobe: {e}"))?;
@@ -520,7 +534,7 @@ fn prepare_linux_driver() -> Result<(), String> {
     if let Err(ref e) = test_open {
         if e.kind() == std::io::ErrorKind::PermissionDenied {
             println!("[camera] Permission denied for /dev/video9. Attempting to fix permissions using pkexec chmod...");
-            let chmod_status = std::process::Command::new("pkexec")
+            let chmod_status = create_command("pkexec")
                 .args(&["chmod", "0666", "/dev/video9"])
                 .status()
                 .map_err(|e| format!("Failed to run pkexec chmod: {e}"))?;
@@ -534,8 +548,8 @@ fn prepare_linux_driver() -> Result<(), String> {
 
 #[cfg(target_os = "windows")]
 fn is_windows_driver_registered() -> bool {
-    let status = std::process::Command::new("reg")
-        .args(&["query", "HKCR\\CLSID\\{A3FCE0F7-EC31-406F-A1C2-2ED02B1D375B}"])
+    let status = create_command("reg")
+        .args(&["query", "HKCR\\CLSID\\{A3FCE0F5-3493-419F-958A-ABA1250EC20B}"])
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status();
@@ -570,7 +584,7 @@ fn prepare_windows_driver(app: &tauri::AppHandle) -> Result<(), String> {
 
     println!("[camera] Launching elevated regsvr32 for DLL: {:?}", dll_path);
     
-    let status = std::process::Command::new("powershell")
+    let status = create_command("powershell")
         .args(&[
             "-Command",
             &format!(
@@ -598,6 +612,7 @@ mod linux_cam {
     use std::fs::File;
     use std::io::Write;
     use std::os::unix::fs::OpenOptionsExt;
+    use super::create_command;
 
     pub struct LinuxVirtualCamera(File);
 
@@ -605,7 +620,7 @@ mod linux_cam {
         pub fn create(w: u32, h: u32) -> Result<Self, String> {
             // Set the video format on the device BEFORE opening the file writer.
             // Setting format fails with EBUSY if a writer is already holding the device descriptor.
-            let format_status = std::process::Command::new("v4l2-ctl")
+            let format_status = create_command("v4l2-ctl")
                 .args(&[
                     "-d", "/dev/video9",
                     "--set-fmt-video-out",
