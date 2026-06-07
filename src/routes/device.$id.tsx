@@ -27,6 +27,9 @@ function DeviceRoute() {
     toggleTerminalAccess,
   } = useDeviceSettings(id)
 
+  const isWindows = /windows|win32/i.test(navigator.userAgent)
+  const isMac = /macintosh|mac os x/i.test(navigator.userAgent)
+
   const [transferring, setTransferring] = useState(false)
   const [cameraStreaming, setCameraStreaming] = useState(false)
   const [cameraIp, setCameraIp] = useState('')
@@ -406,7 +409,15 @@ function DeviceRoute() {
                           System Virtual Camera Active
                         </div>
                         <div style={{ fontSize: '12.5px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
-                          Available in Zoom, Meet, and other platforms as <code style={{ background: 'var(--bg-elevated)', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', color: 'var(--accent)' }}>Sync Camera</code> (/dev/video9).
+                          {isWindows ? (
+                            <>
+                              Available in Zoom, Meet, and other platforms as <code style={{ background: 'var(--bg-elevated)', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', color: 'var(--accent)' }}>OBS Virtual Camera</code>.
+                            </>
+                          ) : (
+                            <>
+                              Available in Zoom, Meet, and other platforms as <code style={{ background: 'var(--bg-elevated)', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', color: 'var(--accent)' }}>Sync Camera</code> (/dev/video9).
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -440,59 +451,129 @@ function DeviceRoute() {
                         </div>
                       </div>
                       
-                      <div style={{
-                        background: 'var(--bg-elevated)',
-                        border: '1px solid var(--border)',
-                        borderRadius: 'var(--radius-md)',
-                        padding: '12px 16px',
-                        fontSize: '12.5px'
-                      }}>
-                        <div style={{ fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                          To make this camera available in Zoom and other apps:
+                      {isWindows ? (
+                        <div style={{
+                          background: 'var(--bg-elevated)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 'var(--radius-md)',
+                          padding: '12px 16px',
+                          fontSize: '12.5px'
+                        }}>
+                          <div style={{ fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                            To make this camera available in Zoom, Meet, and other apps on Windows:
+                          </div>
+                          <ol style={{ paddingLeft: '20px', margin: '0 0 12px 0', color: 'var(--text-tertiary)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <li>Make sure <strong>OBS Studio</strong> (v26.0 or newer) is installed on your PC. You can download it from <a href="https://obsproject.com" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>obsproject.com</a>.</li>
+                            <li>If OBS is installed but the virtual camera still fails, you may need to register the driver. Open a Command Prompt as <strong>Administrator</strong> and run:
+                              <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                background: 'var(--bg-base)',
+                                padding: '6px 10px',
+                                borderRadius: '4px',
+                                marginTop: '4px',
+                                fontFamily: 'monospace',
+                                fontSize: '11px',
+                                color: 'var(--accent)',
+                                border: '1px solid var(--border)',
+                                overflowX: 'auto',
+                                whiteSpace: 'pre'
+                              }}>
+                                cd "C:\Program Files\obs-studio\data\obs-plugins\win-dshow"
+                              </div>
+                              <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                background: 'var(--bg-base)',
+                                padding: '6px 10px',
+                                borderRadius: '4px',
+                                marginTop: '4px',
+                                fontFamily: 'monospace',
+                                fontSize: '11px',
+                                color: 'var(--accent)',
+                                border: '1px solid var(--border)',
+                                overflowX: 'auto',
+                                whiteSpace: 'pre'
+                              }}>
+                                virtualcam-install.bat
+                              </div>
+                            </li>
+                            <li>Restart your computer, then select <strong>OBS Virtual Camera</strong> as the video source in your video conferencing application.</li>
+                          </ol>
+                          <div style={{ color: 'var(--text-tertiary)', fontSize: '11.5px', fontStyle: 'italic' }}>
+                            Note: Once you register the driver, turn this stream Off and back On.
+                          </div>
                         </div>
-                        <ol style={{ paddingLeft: '20px', margin: '0 0 12px 0', color: 'var(--text-tertiary)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                          <li>Make sure `v4l2loopback` is installed: <code style={{ color: 'var(--text-primary)' }}>sudo apt install v4l2loopback-dkms v4l2loopback-utils</code></li>
-                          <li>Run this command in your terminal to load the driver:
-                            <div style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              background: 'var(--bg-base)',
-                              padding: '6px 10px',
-                              borderRadius: '4px',
-                              marginTop: '4px',
-                              fontFamily: 'monospace',
-                              fontSize: '11px',
-                              color: 'var(--accent)',
-                              border: '1px solid var(--border)',
-                              overflowX: 'auto',
-                              whiteSpace: 'pre'
-                            }}>
-                              sudo modprobe v4l2loopback exclusive_caps=1 card_label="Sync Camera" video_nr=9
-                            </div>
-                          </li>
-                          <li>If you see a permission error, ensure you have write access:
-                            <div style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              background: 'var(--bg-base)',
-                              padding: '6px 10px',
-                              borderRadius: '4px',
-                              marginTop: '4px',
-                              fontFamily: 'monospace',
-                              fontSize: '11px',
-                              color: 'var(--accent)',
-                              border: '1px solid var(--border)',
-                              overflowX: 'auto',
-                              whiteSpace: 'pre'
-                            }}>
-                              sudo chmod 0666 /dev/video9
-                            </div>
-                          </li>
-                        </ol>
-                        <div style={{ color: 'var(--text-tertiary)', fontSize: '11.5px', fontStyle: 'italic' }}>
-                          Note: Once you run these commands, turn this stream Off and back On.
+                      ) : isMac ? (
+                        <div style={{
+                          background: 'var(--bg-elevated)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 'var(--radius-md)',
+                          padding: '12px 16px',
+                          fontSize: '12.5px'
+                        }}>
+                          <div style={{ fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                            macOS Compatibility:
+                          </div>
+                          <div style={{ color: 'var(--text-tertiary)' }}>
+                            The system virtual camera driver is currently not supported on macOS.
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        <div style={{
+                          background: 'var(--bg-elevated)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 'var(--radius-md)',
+                          padding: '12px 16px',
+                          fontSize: '12.5px'
+                        }}>
+                          <div style={{ fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                            To make this camera available in Zoom and other apps:
+                          </div>
+                          <ol style={{ paddingLeft: '20px', margin: '0 0 12px 0', color: 'var(--text-tertiary)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <li>Make sure `v4l2loopback` is installed: <code style={{ color: 'var(--text-primary)' }}>sudo apt install v4l2loopback-dkms v4l2loopback-utils</code></li>
+                            <li>Run this command in your terminal to load the driver:
+                              <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                background: 'var(--bg-base)',
+                                padding: '6px 10px',
+                                borderRadius: '4px',
+                                marginTop: '4px',
+                                fontFamily: 'monospace',
+                                fontSize: '11px',
+                                color: 'var(--accent)',
+                                border: '1px solid var(--border)',
+                                overflowX: 'auto',
+                                whiteSpace: 'pre'
+                              }}>
+                                sudo modprobe v4l2loopback exclusive_caps=1 card_label="Sync Camera" video_nr=9
+                              </div>
+                            </li>
+                            <li>If you see a permission error, ensure you have write access:
+                              <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                background: 'var(--bg-base)',
+                                padding: '6px 10px',
+                                borderRadius: '4px',
+                                marginTop: '4px',
+                                fontFamily: 'monospace',
+                                fontSize: '11px',
+                                color: 'var(--accent)',
+                                border: '1px solid var(--border)',
+                                overflowX: 'auto',
+                                whiteSpace: 'pre'
+                              }}>
+                                sudo chmod 0666 /dev/video9
+                              </div>
+                            </li>
+                          </ol>
+                          <div style={{ color: 'var(--text-tertiary)', fontSize: '11.5px', fontStyle: 'italic' }}>
+                            Note: Once you run these commands, turn this stream Off and back On.
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
