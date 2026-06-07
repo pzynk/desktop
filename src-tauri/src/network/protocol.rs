@@ -33,6 +33,13 @@ pub enum ClientMessage {
         filename: String,
         total_bytes: u64,
     },
+    CameraStreamStarted {
+        port: u16,
+        #[serde(default)]
+        use_adb: bool,
+    },
+
+    CameraStreamStopped,
     Unpair,
 }
 
@@ -71,6 +78,8 @@ pub enum ServerMessage {
         username: String,
         password: Option<String>,
     },
+    StartCameraStream,
+    StopCameraStream,
     Unpair,
 }
 

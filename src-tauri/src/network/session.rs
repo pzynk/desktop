@@ -470,20 +470,26 @@ fn keep_session_open(
                         "[tcp] Received clipboard update from peer: {} bytes",
                         text.len()
                     );
+                    
+                    let normalized = text.replace("\r\n", "\n");
+                    {
+                        let mut last = ctx.last_clipboard.lock().unwrap();
+                        *last = normalized.clone();
+                    }
+
                     let clipboard = ctx.app.clipboard();
-                    let _ = clipboard.write_text(text.clone());
+                    let _ = clipboard.write_text(normalized.clone());
                     
                     // Wait up to 200ms for the clipboard to register the update to prevent feedback loop
                     let start = std::time::Instant::now();
                     while start.elapsed() < Duration::from_millis(200) {
                         if let Ok(curr) = clipboard.read_text() {
-                            if curr.replace("\r\n", "\n") == text.replace("\r\n", "\n") {
+                            if curr.replace("\r\n", "\n") == normalized {
                                 break;
                             }
                         }
                         std::thread::sleep(Duration::from_millis(10));
                     }
-                    *ctx.last_clipboard.lock().unwrap() = text.clone();
                 } else {
                     println!("[tcp] Ignored clipboard update from peer (sync disabled)");
                 }
@@ -557,6 +563,23 @@ fn keep_session_open(
                 let _ = ctx.app.emit("file-transfer-finished", &peer_device_id);
                 restore_default_tray_icon(&ctx.app);
             }
+            Ok(ClientMessage::CameraStreamStarted { port, use_adb }) => {
+                let peer_ip = writer.peer_addr().map(|a| a.ip().to_string()).unwrap_or_default();
+                println!("[tcp] Received CameraStreamStarted from peer: {}:{} (use_adb: {})", peer_ip, port, use_adb);
+                let _ = ctx.app.emit("camera-stream-state-changed", serde_json::json!({
+                    "streaming": true,
+                    "ip": peer_ip,
+                    "port": port,
+                    "use_adb": use_adb,
+                }));
+            }
+
+            Ok(ClientMessage::CameraStreamStopped) => {
+                println!("[tcp] Received CameraStreamStopped from peer");
+                let _ = ctx.app.emit("camera-stream-state-changed", serde_json::json!({
+                    "streaming": false,
+                }));
+            }
             Ok(ClientMessage::Unpair) => {
                 println!("[tcp] Received Unpair request from peer");
                 let _ = ctx.trusted_peers.lock().unwrap().remove(&peer_device_id);
@@ -573,6 +596,9 @@ fn keep_session_open(
         }
     };
 
+    let _ = ctx.app.emit("camera-stream-state-changed", serde_json::json!({
+        "streaming": false,
+    }));
     media_running.store(false, std::sync::atomic::Ordering::Relaxed);
     ctx.app.unlisten(event_id);
     ctx.app.unlisten(term_event_id);

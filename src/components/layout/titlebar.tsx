@@ -1,5 +1,5 @@
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import logo from '../../assets/logo.png'
+import logo from '../../assets/logo-full.png'
 
 export function Titlebar() {
   const appWindow = getCurrentWindow()

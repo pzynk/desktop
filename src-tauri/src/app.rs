@@ -45,6 +45,8 @@ pub struct AppState {
     pub tray_menu: tauri::menu::Menu<tauri::Wry>,
     pub active_transfer: Arc<Mutex<Option<TransferProgress>>>,
     pub terminal_server: Arc<Mutex<Option<crate::system::terminal::TerminalServerManager>>>,
+    pub virtual_camera_running: Arc<Mutex<Option<tokio::sync::oneshot::Sender<()>>>>,
+    pub latest_camera_frame: Arc<Mutex<Option<Vec<u8>>>>,
 }
 
 impl AppState {
@@ -374,6 +376,8 @@ pub fn run() {
                 tray_menu: tray_menu.clone(),
                 active_transfer: Arc::new(Mutex::new(None)),
                 terminal_server: Arc::new(Mutex::new(Some(terminal_server))),
+                virtual_camera_running: Arc::new(Mutex::new(None)),
+                latest_camera_frame: Arc::new(Mutex::new(None)),
             };
             start_background_services(app.handle(), &state).map_err(setup_error)?;
             let last_clipboard_clone = state.last_clipboard.clone();
@@ -391,9 +395,9 @@ pub fn run() {
                         let mut last = last_clipboard_clone.lock().unwrap();
                         let normalized_text = text.replace("\r\n", "\n");
                         let normalized_last = last.replace("\r\n", "\n");
-                        if normalized_text != normalized_last && !text.is_empty() {
-                            *last = text.clone();
-                            let _ = app_handle.emit("desktop-clipboard-update", &text);
+                        if normalized_text != normalized_last && !normalized_text.is_empty() {
+                            *last = normalized_text.clone();
+                            let _ = app_handle.emit("desktop-clipboard-update", &normalized_text);
                         }
                     }
                     
@@ -540,6 +544,32 @@ pub fn run() {
 
             Ok(())
         })
+        .register_uri_scheme_protocol("sync-stream", |ctx, _request| {
+            let app_handle = ctx.app_handle();
+            let state = app_handle.state::<AppState>();
+            let frame_bytes = {
+                let guard = state.latest_camera_frame.lock().unwrap();
+                guard.clone()
+            };
+
+            match frame_bytes {
+                Some(bytes) => {
+                    tauri::http::Response::builder()
+                        .header("Content-Type", "image/jpeg")
+                        .header("Cache-Control", "no-cache, no-store, must-revalidate")
+                        .header("Pragma", "no-cache")
+                        .header("Expires", "0")
+                        .body(bytes)
+                        .unwrap()
+                }
+                None => {
+                    tauri::http::Response::builder()
+                        .status(404)
+                        .body(Vec::new())
+                        .unwrap()
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             commands::greet::greet,
             commands::device::get_device_ip,
@@ -559,6 +589,10 @@ pub fn run() {
             commands::device::get_active_transfer,
             commands::updater::install_update_linux,
             commands::updater::relaunch_app,
+            commands::camera::toggle_camera_stream,
+            commands::camera::start_virtual_camera,
+            commands::camera::stop_virtual_camera,
+            commands::camera::get_latest_frame,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

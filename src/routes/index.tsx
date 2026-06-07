@@ -8,7 +8,7 @@ import { SettingsModal } from '../components/layout/settings-modal'
 import { PairModal } from '../components/layout/pair-modal'
 import { check } from '@tauri-apps/plugin-updater'
 import { invoke } from '@tauri-apps/api/core'
-import logo from '../assets/logo.png'
+import logo from '../assets/logo-full.png'
 
 export const Route = createFileRoute('/')({
   component: RouteComponent,
