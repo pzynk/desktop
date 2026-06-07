@@ -5,7 +5,8 @@ set -e
 CURRENT_VERSION=$(node -e "console.log(require('./src-tauri/tauri.conf.json').version)")
 
 # Prompt for new version
-read -p "Enter new version (current is $CURRENT_VERSION): " VERSION
+printf "Enter new version (current is %s): " "$CURRENT_VERSION"
+read VERSION
 
 if [ -z "$VERSION" ]; then
   echo "No version entered. Keeping current version ($CURRENT_VERSION)."
@@ -22,12 +23,39 @@ else
   "
 fi
 
-# 1. Run the build scripts
-echo "Building Debian package..."
-sh ./scripts/build-deb.sh
+echo "Select OS to build:"
+echo "1) Linux (Debian)"
+echo "2) Windows"
+echo "3) Both (Default)"
+printf "Choice [1-3]: "
+read BUILD_CHOICE
 
-echo "Building Windows setup..."
-sh ./scripts/build-win.sh
+BUILD_LINUX=false
+BUILD_WINDOWS=false
+
+case "$BUILD_CHOICE" in
+  1)
+    BUILD_LINUX=true
+    ;;
+  2)
+    BUILD_WINDOWS=true
+    ;;
+  *)
+    BUILD_LINUX=true
+    BUILD_WINDOWS=true
+    ;;
+esac
+
+# 1. Run the build scripts
+if [ "$BUILD_LINUX" = true ]; then
+  echo "Building Debian package..."
+  sh ./scripts/build-deb.sh
+fi
+
+if [ "$BUILD_WINDOWS" = true ]; then
+  echo "Building Windows setup..."
+  sh ./scripts/build-win.sh
+fi
 
 echo "Building version: $VERSION"
 
@@ -47,17 +75,25 @@ mkdir -p release/deb release/windows
 
 # 5. Copy the artifacts
 echo "Copying built artifacts to release/..."
-cp "$DEB_SRC" "$DEB_DEST"
-cp "$DEB_SIG_SRC" "$DEB_SIG_DEST"
-cp "$WIN_SRC" "$WIN_DEST"
-cp "$WIN_SIG_SRC" "$WIN_SIG_DEST"
+if [ "$BUILD_LINUX" = true ]; then
+  cp "$DEB_SRC" "$DEB_DEST"
+  cp "$DEB_SIG_SRC" "$DEB_SIG_DEST"
+fi
+if [ "$BUILD_WINDOWS" = true ]; then
+  cp "$WIN_SRC" "$WIN_DEST"
+  cp "$WIN_SIG_SRC" "$WIN_SIG_DEST"
+fi
 
 # Copy to showcase public folder for downloading
 SHOWCASE_DOWNLOADS="../showcase/public/downloads"
 if [ -d "$SHOWCASE_DOWNLOADS" ] || mkdir -p "$SHOWCASE_DOWNLOADS"; then
   echo "Copying to showcase downloads..."
-  cp "$DEB_DEST" "$SHOWCASE_DOWNLOADS/app.deb"
-  cp "$WIN_DEST" "$SHOWCASE_DOWNLOADS/app.exe"
+  if [ "$BUILD_LINUX" = true ]; then
+    cp "$DEB_DEST" "$SHOWCASE_DOWNLOADS/app.deb"
+  fi
+  if [ "$BUILD_WINDOWS" = true ]; then
+    cp "$WIN_DEST" "$SHOWCASE_DOWNLOADS/app.exe"
+  fi
   
   # Copy Android APK if it exists
   APK_SRC="../app/app/build/intermediates/apk/debug/app-debug.apk"
@@ -72,8 +108,6 @@ if [ -f "/home/adhil/.tauri/myapp.key.pub" ]; then
 fi
 
 # 6. Generate latest.json
-DEB_SIG=$(cat "$DEB_SIG_DEST")
-WIN_SIG=$(cat "$WIN_SIG_DEST")
 PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 cat <<EOF > release/latest.json
@@ -82,14 +116,24 @@ cat <<EOF > release/latest.json
   "notes": "Release v$VERSION",
   "pub_date": "$PUB_DATE",
   "platforms": {
+$(if [ "$BUILD_LINUX" = true ]; then
+DEB_SIG=$(cat "$DEB_SIG_DEST")
+cat <<INNER_EOF
     "linux-x86_64": {
       "signature": "$DEB_SIG",
       "url": "https://github.com/pzynk/desktop/releases/download/v$VERSION/Pzync_${VERSION}_amd64.deb"
-    },
+    }$(if [ "$BUILD_WINDOWS" = true ]; then echo ","; else echo ""; fi)
+INNER_EOF
+fi)
+$(if [ "$BUILD_WINDOWS" = true ]; then
+WIN_SIG=$(cat "$WIN_SIG_DEST")
+cat <<INNER_EOF
     "windows-x86_64": {
       "signature": "$WIN_SIG",
       "url": "https://github.com/pzynk/desktop/releases/download/v$VERSION/Pzync_${VERSION}_x64-setup.exe"
     }
+INNER_EOF
+fi)
   }
 }
 EOF
@@ -102,6 +146,14 @@ git push origin main
 
 # 8. Create GitHub Release and upload binaries
 echo "Creating GitHub Release v$VERSION and uploading binaries..."
-gh release create "v$VERSION" "$DEB_SRC" "$WIN_SRC" --title "v$VERSION" --notes "Release v$VERSION"
+# Clear positional parameters to build the upload arguments list in a POSIX-compliant way
+set --
+if [ "$BUILD_LINUX" = true ]; then
+  set -- "$@" "$DEB_SRC"
+fi
+if [ "$BUILD_WINDOWS" = true ]; then
+  set -- "$@" "$WIN_SRC"
+fi
+gh release create "v$VERSION" "$@" --title "v$VERSION" --notes "Release v$VERSION"
 
 echo "Done! Release v$VERSION successfully built, pushed, and published on GitHub!"

@@ -34,3 +34,6 @@ scripts/build-deb.sh
 # Release binaries and signatures
 release/deb/
 release/windows/
+
+# Third-party resources downloaded during build
+src-tauri/resources/obs-virtualcam-module64.dll
