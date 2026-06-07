@@ -1,11 +1,11 @@
 {
   "version": "0.2.4",
   "notes": "Release v0.2.4",
-  "pub_date": "2026-06-07T11:21:34Z",
+  "pub_date": "2026-06-07T11:24:15Z",
   "platforms": {
 
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMS9aa0h6NTFoUWNlbzRnTDdBN3QyL0ZrK0hEQi94enZ1b25jVXBoc09QcnRSVkJzS2FwV0VTWXJZYkcrQzQ0aGtuZmdPOWVRUzk3ZXhydWZiTFpQSGFtM0dJbUtSYUFJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwODMxMjk0CWZpbGU6UHp5bmNfMC4yLjRfeDY0LXNldHVwLmV4ZQo0bFlobloyZVBOR1U3d2c3enE3Z2VEcnlmMUxVRFVodTJHUDZad2YwQlJkOG5haFJyK0lOYlpyYkU2elZ1S0FTQksyQXQyZEVKVjNkcHZWNHRScXdEZz09Cg==",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMS9aa0h6NTFoUVZ1M0RvMy9pYVFDWUlQSGUzWXRubTFhNHU3SkNJRko1NUpWNTNLWG13MnZrNGtZTytxOVpHTVNGWWFIdHhUeW5WaTVKOFlRV1ltWUJVWjdaWTJ3SVFFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwODMxNDU1CWZpbGU6UHp5bmNfMC4yLjRfeDY0LXNldHVwLmV4ZQprTTQ5K2w5YmtraEpUMm84UkZUUGVvTDdvcVFXR2V3QzFBb0doaHBtbU0vWndaKzVYQzBMdlJackE5NXYzUkllejhEdzBiQkNGaWo4eGliNGNwcktDUT09Cg==",
       "url": "https://github.com/pzynk/desktop/releases/download/v0.2.4/Pzync_0.2.4_x64-setup.exe"
     }
   }
