@@ -1,14 +1,11 @@
 {
   "version": "0.2.4",
   "notes": "Release v0.2.4",
-  "pub_date": "2026-06-07T10:10:28Z",
+  "pub_date": "2026-06-07T11:21:34Z",
   "platforms": {
-    "linux-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMS9aa0h6NTFoUVYzemhVNWExY3I1UW9PSldwL1pVTHdmUnEyeU9veVJibFhHT3B5SGZOOExHaWR4dmdOT2VRdGt1ekluNHhGQXB4QlhpcDhXMXo0cllqSFlUUjNDdlFVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwODI2OTY5CWZpbGU6UHp5bmNfMC4yLjRfYW1kNjQuZGViCmczWCsxQVdPSjJ5NTBSaXdGU3FUNXgwRW00c1drZ21Za1B4Z0gycHpvWlpXTXhSWGtaMFVEZ1lDNSszZVpLdlZqL2pWYWJ1ZWt1UjVqbU1nSGN4aUFnPT0K",
-      "url": "https://github.com/pzynk/desktop/releases/download/v0.2.4/Pzync_0.2.4_amd64.deb"
-    },
+
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMS9aa0h6NTFoUVgybzRoNUcyalF2TTNrQjg3RXBZYnF4NHNhNmlDRmdzcFVPV1FrdlZpb2d0SzB5VDZpYkxtUFQvL3QrdlVPckN5MDk5V09SdEtvcWhNL3R3cmdBOFFnPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwODI3MDI3CWZpbGU6UHp5bmNfMC4yLjRfeDY0LXNldHVwLmV4ZQpIU0hoY0hxNVZ3blQ5RDUvM1FxUE5QU3lySHBTRWJyWEg2QTlaOUtsdzVxdHJ2RmtDZXNhVVFpL1M2b09lSDl0d1QvbDRhdjhlczhaYVNPRTIzeHpDUT09Cg==",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMS9aa0h6NTFoUWNlbzRnTDdBN3QyL0ZrK0hEQi94enZ1b25jVXBoc09QcnRSVkJzS2FwV0VTWXJZYkcrQzQ0aGtuZmdPOWVRUzk3ZXhydWZiTFpQSGFtM0dJbUtSYUFJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwODMxMjk0CWZpbGU6UHp5bmNfMC4yLjRfeDY0LXNldHVwLmV4ZQo0bFlobloyZVBOR1U3d2c3enE3Z2VEcnlmMUxVRFVodTJHUDZad2YwQlJkOG5haFJyK0lOYlpyYkU2elZ1S0FTQksyQXQyZEVKVjNkcHZWNHRScXdEZz09Cg==",
       "url": "https://github.com/pzynk/desktop/releases/download/v0.2.4/Pzync_0.2.4_x64-setup.exe"
     }
   }
