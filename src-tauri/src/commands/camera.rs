@@ -136,6 +136,37 @@ pub async fn start_virtual_camera(
             }
         }
 
+        #[cfg(target_os = "windows")]
+        {
+            let _ = app_handle.emit(
+                "virtual-camera-state-changed",
+                serde_json::json!({
+                    "active": false,
+                    "error": "Preparing driver (check for administrator prompt)...",
+                }),
+            );
+            if let Err(e) = prepare_windows_driver(&app_handle) {
+                eprintln!("[camera] Driver preparation failed: {e}");
+                let _ = app_handle.emit(
+                    "virtual-camera-state-changed",
+                    serde_json::json!({
+                        "active": false,
+                        "error": format!("Driver initialization failed: {e}"),
+                    }),
+                );
+                
+                let state = app_handle.state::<AppState>();
+                let mut active_streams = state.active_streams.lock().unwrap();
+                for stream in active_streams.values_mut() {
+                    let message = crate::network::protocol::ServerMessage::StopCameraStream;
+                    let _ = crate::network::protocol::write_line_json(stream, &message);
+                }
+                let mut guard = state.virtual_camera_running.lock().unwrap();
+                *guard = None;
+                return;
+            }
+        }
+
         let target_ip = if use_adb { "127.0.0.1".to_string() } else { ip };
         let target_port = if use_adb { 40000 } else { port };
 
@@ -498,6 +529,67 @@ fn prepare_linux_driver() -> Result<(), String> {
             }
         }
     }
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn is_windows_driver_registered() -> bool {
+    let status = std::process::Command::new("reg")
+        .args(&["query", "HKCR\\CLSID\\{A3FCE0F7-EC31-406F-A1C2-2ED02B1D375B}"])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+
+    match status {
+        Ok(s) => s.success(),
+        Err(_) => false,
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn prepare_windows_driver(app: &tauri::AppHandle) -> Result<(), String> {
+    if is_windows_driver_registered() {
+        println!("[camera] OBS Virtual Camera driver is already registered.");
+        return Ok(());
+    }
+
+    println!("[camera] OBS Virtual Camera driver not found. Attempting to register bundled DLL...");
+
+    use tauri::path::BaseDirectory;
+    let dll_path = app
+        .path()
+        .resolve("resources/obs-virtualcam-module64.dll", BaseDirectory::Resource)
+        .map_err(|e| format!("Failed to resolve DLL path: {e}"))?;
+
+    if !dll_path.exists() {
+        return Err(format!(
+            "Bundled obs-virtualcam-module64.dll not found at resource path: {:?}",
+            dll_path
+        ));
+    }
+
+    println!("[camera] Launching elevated regsvr32 for DLL: {:?}", dll_path);
+    
+    let status = std::process::Command::new("powershell")
+        .args(&[
+            "-Command",
+            &format!(
+                "Start-Process regsvr32 -ArgumentList '/s \"{}\"' -Verb RunAs -Wait",
+                dll_path.to_string_lossy()
+            ),
+        ])
+        .status()
+        .map_err(|e| format!("Failed to launch elevated registration: {e}"))?;
+
+    if !status.success() {
+        return Err("Registration failed or was cancelled by the user.".into());
+    }
+
+    if !is_windows_driver_registered() {
+        return Err("DLL registration command completed, but class registry check still failed.".into());
+    }
+
+    println!("[camera] OBS Virtual Camera driver registered successfully!");
     Ok(())
 }
 
