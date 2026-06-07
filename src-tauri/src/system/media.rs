@@ -147,6 +147,22 @@ pub fn get_media_state() -> Option<MediaState> {
 
 #[cfg(target_os = "linux")]
 pub fn send_media_command(command: &str, value: Option<f64>) -> Result<(), String> {
+    match command {
+        "SetSystemVolume" => {
+            if let Some(v) = value {
+                return set_system_volume(v);
+            }
+            return Ok(());
+        }
+        "SystemVolumeUp" => {
+            return adjust_system_volume(true);
+        }
+        "SystemVolumeDown" => {
+            return adjust_system_volume(false);
+        }
+        _ => {}
+    }
+
     let conn = Connection::new_session().map_err(|e| e.to_string())?;
     let proxy = conn.with_proxy("org.freedesktop.DBus", "/", Duration::from_millis(500));
 
@@ -194,17 +210,6 @@ pub fn send_media_command(command: &str, value: Option<f64>) -> Result<(), Strin
                     (track_id_path, position_us),
                 ).map_err(|e| e.to_string())?;
             }
-        }
-        "SetSystemVolume" => {
-            if let Some(v) = value {
-                set_system_volume(v)?;
-            }
-        }
-        "SystemVolumeUp" => {
-            adjust_system_volume(true)?;
-        }
-        "SystemVolumeDown" => {
-            adjust_system_volume(false)?;
         }
         _ => return Err(format!("Unknown media command: {}", command)),
     }
@@ -285,7 +290,27 @@ pub fn send_media_command(command: &str, value: Option<f64>) -> Result<(), Strin
     Ok(())
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "windows")))]
+#[cfg(target_os = "macos")]
+pub fn send_media_command(command: &str, value: Option<f64>) -> Result<(), String> {
+    match command {
+        "SetSystemVolume" | "SetVolume" => {
+            if let Some(v) = value {
+                set_system_volume(v)
+            } else {
+                Ok(())
+            }
+        }
+        "SystemVolumeUp" | "VolumeUp" => {
+            adjust_system_volume(true)
+        }
+        "SystemVolumeDown" | "VolumeDown" => {
+            adjust_system_volume(false)
+        }
+        _ => Err(format!("Media command '{}' is not supported on macOS", command)),
+    }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
 pub fn send_media_command(_command: &str, _value: Option<f64>) -> Result<(), String> {
     Err("Media commands are not supported on this platform".to_string())
 }
@@ -360,7 +385,38 @@ pub fn get_system_volume() -> Option<(f64, bool)> {
     }
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "windows")))]
+#[cfg(target_os = "macos")]
+pub fn get_system_volume() -> Option<(f64, bool)> {
+    use std::process::Command;
+    let output = Command::new("osascript")
+        .args(&[
+            "-e",
+            "set ovol to output volume of (get volume settings)",
+            "-e",
+            "set omut to output muted of (get volume settings)",
+            "-e",
+            "ovol & \"|\" & omut",
+        ])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let trimmed = stdout.trim();
+    let parts: Vec<&str> = trimmed.split('|').collect();
+    if parts.len() == 2 {
+        let vol_pct = parts[0].parse::<f64>().ok()? / 100.0;
+        let muted = parts[1].trim().eq_ignore_ascii_case("true");
+        Some((vol_pct, muted))
+    } else {
+        None
+    }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
 pub fn get_system_volume() -> Option<(f64, bool)> {
     None
 }
@@ -410,7 +466,28 @@ pub fn set_system_volume(volume: f64) -> Result<(), String> {
     }
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "windows")))]
+#[cfg(target_os = "macos")]
+pub fn set_system_volume(volume: f64) -> Result<(), String> {
+    use std::process::Command;
+    let pct = (volume * 100.0).round() as i32;
+    let status = Command::new("osascript")
+        .args(&[
+            "-e",
+            &format!("set volume output volume {}", pct),
+            "-e",
+            "set volume without output muted",
+        ])
+        .status()
+        .map_err(|e| e.to_string())?;
+
+    if status.success() {
+        Ok(())
+    } else {
+        Err("Failed to set system volume on macOS".to_string())
+    }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
 pub fn set_system_volume(_volume: f64) -> Result<(), String> {
     Err("Volume control is not supported on this platform".to_string())
 }
@@ -464,7 +541,15 @@ pub fn adjust_system_volume(up: bool) -> Result<(), String> {
     }
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "windows")))]
+#[cfg(target_os = "macos")]
+pub fn adjust_system_volume(up: bool) -> Result<(), String> {
+    let (current, _) = get_system_volume().ok_or_else(|| "Failed to get current system volume".to_string())?;
+    let delta = if up { 0.05 } else { -0.05 };
+    let new_volume = (current + delta).clamp(0.0, 1.0);
+    set_system_volume(new_volume)
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
 pub fn adjust_system_volume(_up: bool) -> Result<(), String> {
     Err("Volume control is not supported on this platform".to_string())
 }

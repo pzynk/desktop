@@ -14,9 +14,11 @@
       {
         "title": "Pzync",
         "label": "main",
-        "width": 800,
+        "width": 400,
         "height": 600,
-        "visible": false
+        "visible": false,
+        "decorations": false,
+        "resizable": false
       }
     ],
     "security": {

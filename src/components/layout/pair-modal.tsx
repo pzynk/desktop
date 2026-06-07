@@ -10,9 +10,6 @@ export function PairModal({ request, onResolve }: PairModalProps) {
   return (
     <div className="modal-backdrop">
       <div className="modal-card">
-        <div className="modal-badge">
-          <span>⚡</span> Pair Request
-        </div>
         <div className="modal-title">{request.name}</div>
         <div className="modal-sub">
           Confirm the code below matches what's shown on the Android device before accepting.

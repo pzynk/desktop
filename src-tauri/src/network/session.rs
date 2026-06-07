@@ -275,6 +275,17 @@ fn keep_session_open(
         }
     }
 
+    // Bug 3 fix: push the current system volume immediately on connect so the
+    // Android VolumeProviderCompat is created before any hardware-key press.
+    {
+        if let Some((vol, muted)) = crate::system::media::get_system_volume() {
+            let msg = ServerMessage::SystemVolumeUpdate { volume: vol, muted };
+            if let Ok(mut w) = writer_clone.lock() {
+                let _ = write_line_json(&mut *w, &msg);
+            }
+        }
+    }
+
     let peer_id_for_term = peer_device_id.clone();
     let app_for_term = ctx.app.clone();
     let writer_for_term = writer_clone.clone();

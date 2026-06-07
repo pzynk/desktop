@@ -107,7 +107,7 @@ function TransferComponent() {
       </header>
 
       {/* Scrollable Content */}
-      <div className="main-content scrollable" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 'calc(100vh - 64px)' }}>
+      <div className="main-content scrollable" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{
           width: '100%',
           maxWidth: '480px',
