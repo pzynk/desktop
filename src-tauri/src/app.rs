@@ -293,43 +293,227 @@ pub fn disconnect_peer(device_id: &str, state: &AppState) {
         .remove(device_id);
 }
 
-/// Read a file from disk, encode it as Base64, and send it to the
+/// Read a file from disk, encode it as Base64 streamingly, and send it to the
 /// specified peer over their active TCP stream.
-fn send_file_to_device(path_str: &str, device_id: &str, state: &AppState) {
-    match std::fs::read(path_str) {
-        Ok(data) => {
-            use base64::Engine;
-            let base64_data = base64::engine::general_purpose::STANDARD.encode(&data);
-            let file_name = std::path::Path::new(path_str)
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string();
-            // Calculate SHA-256 hash of raw file data
-            let sha256 = {
-                use sha2::{Digest, Sha256};
-                let mut hasher = Sha256::new();
-                hasher.update(&data);
-                let result = hasher.finalize();
-                result.iter().map(|b| format!("{:02x}", b)).collect::<String>()
-            };
+fn send_file_to_device(path_str: &str, device_id: &str, _state: &AppState, app: &AppHandle) {
+    let path_str = path_str.to_string();
+    let device_id = device_id.to_string();
+    let app_clone = app.clone();
 
-            let message = crate::network::protocol::ServerMessage::IncomingFile {
-                filename: file_name.clone(),
-                base64_data,
-                sha256,
-            };
-            if let Some(mut stream) = state.active_streams.lock().unwrap().get_mut(device_id) {
-                match crate::network::protocol::write_line_json(&mut stream, &message) {
-                    Ok(_) => println!("[file] Sent '{}' to {}", file_name, device_id),
-                    Err(e) => eprintln!("[file] Failed to send '{}': {}", file_name, e),
+    std::thread::spawn(move || {
+        let state = app_clone.state::<AppState>();
+        let path = std::path::Path::new(&path_str);
+        let file_name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+        
+        let metadata = match std::fs::metadata(path) {
+            Ok(m) => m,
+            Err(e) => {
+                eprintln!("[file] Failed to get metadata for '{}': {}", path_str, e);
+                return;
+            }
+        };
+        let file_size = metadata.len();
+
+        let mut file = match std::fs::File::open(path) {
+            Ok(f) => f,
+            Err(e) => {
+                eprintln!("[file] Failed to open '{}': {}", path_str, e);
+                return;
+            }
+        };
+
+        // Calculate SHA-256 streamingly
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        let mut buffer = vec![0u8; 65536];
+        loop {
+            use std::io::Read;
+            match file.read(&mut buffer) {
+                Ok(0) => break,
+                Ok(n) => hasher.update(&buffer[..n]),
+                Err(e) => {
+                    eprintln!("[file] Failed to read for hash calculation: {}", e);
+                    return;
                 }
-            } else {
-                eprintln!("[file] No active stream for device {}", device_id);
             }
         }
-        Err(e) => eprintln!("[file] Could not read '{}': {}", path_str, e),
+        let sha256 = hasher.finalize().iter().map(|b| format!("{:02x}", b)).collect::<String>();
+
+        // Reset file cursor to start
+        use std::io::Seek;
+        if let Err(e) = file.seek(std::io::SeekFrom::Start(0)) {
+            eprintln!("[file] Failed to seek file: {}", e);
+            return;
+        }
+
+        // Pre-calculate total payload bytes of the IncomingFile message.
+        let escaped_filename = serde_json::to_string(&file_name).unwrap_or_else(|_| format!("\"{}\"", file_name));
+        let escaped_filename_raw = if escaped_filename.starts_with('"') && escaped_filename.ends_with('"') {
+            &escaped_filename[1..escaped_filename.len() - 1]
+        } else {
+            &escaped_filename
+        };
+        let base64_len = ((file_size + 2) / 3) * 4;
+        let total_payload_bytes = 36 + escaped_filename_raw.len() + 17 + base64_len as usize + 12 + 64 + 2;
+
+        // Send FileTransferStart
+        let start_msg = crate::network::protocol::ServerMessage::FileTransferStart {
+            filename: file_name.clone(),
+            total_bytes: total_payload_bytes as u64,
+        };
+
+        // Get the stream and send start
+        {
+            let active_streams = state.active_streams.clone();
+            let mut streams_guard = active_streams.lock().unwrap();
+            let stream = match streams_guard.get_mut(&device_id) {
+                Some(s) => s,
+                None => {
+                    eprintln!("[file] No active stream for device {}", device_id);
+                    return;
+                }
+            };
+
+            if let Err(e) = crate::network::protocol::write_line_json(stream, &start_msg) {
+                eprintln!("[file] Failed to send FileTransferStart: {}", e);
+                return;
+            }
+        }
+
+        // Update active transfer state on desktop
+        {
+            let mut transfer = state.active_transfer.lock().unwrap();
+            *transfer = Some(TransferProgress {
+                device_id: device_id.clone(),
+                filename: file_name.clone(),
+                bytes_received: 0,
+                total_bytes: total_payload_bytes as u64,
+                speed_bytes_per_sec: 0.0,
+                status: "Sending".to_string(),
+            });
+        }
+        let _ = refresh_tray_menu(&app_clone);
+        let _ = app_clone.emit("file-transfer-started", &device_id);
+
+        // Send prefix, stream base64 data, then suffix
+        let active_streams = state.active_streams.clone();
+        let mut streams_guard = active_streams.lock().unwrap();
+        let stream = match streams_guard.get_mut(&device_id) {
+            Some(s) => s,
+            None => {
+                eprintln!("[file] Connection lost for device {}", device_id);
+                reset_active_transfer(&state, &app_clone, &device_id);
+                return;
+            }
+        };
+
+        let prefix = format!(
+            "{{\"type\":\"IncomingFile\",\"filename\":\"{}\",\"base64_data\":\"",
+            escaped_filename_raw
+        );
+        use std::io::Write;
+        if let Err(e) = stream.write_all(prefix.as_bytes()) {
+            eprintln!("[file] Failed to write prefix: {}", e);
+            drop(streams_guard);
+            reset_active_transfer(&state, &app_clone, &device_id);
+            return;
+        }
+
+        let start_time = std::time::Instant::now();
+        let mut total_bytes_sent = 0;
+        let mut error_occurred = false;
+
+        // Use base64 EncoderWriter to encode on the fly
+        use base64::engine::general_purpose::STANDARD;
+        {
+            let mut encoder = base64::write::EncoderWriter::new(&mut *stream, &STANDARD);
+            loop {
+                use std::io::Read;
+                match file.read(&mut buffer) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        if let Err(e) = encoder.write_all(&buffer[..n]) {
+                            eprintln!("[file] Write error during streaming: {}", e);
+                            error_occurred = true;
+                            break;
+                        }
+                        total_bytes_sent += n as u64;
+                        
+                        let current_base64_sent = ((total_bytes_sent + 2) / 3) * 4;
+                        let current_total_sent = prefix.len() as u64 + current_base64_sent;
+                        
+                        update_send_progress(&device_id, current_total_sent, start_time, &state, &app_clone);
+                    }
+                    Err(e) => {
+                        eprintln!("[file] Read error during streaming: {}", e);
+                        error_occurred = true;
+                        break;
+                    }
+                }
+            }
+            if let Err(e) = encoder.finish() {
+                eprintln!("[file] Failed to finish base64 encoding: {}", e);
+                error_occurred = true;
+            }
+        } // encoder is dropped here, releasing borrow on stream
+
+        if error_occurred {
+            drop(streams_guard);
+            reset_active_transfer(&state, &app_clone, &device_id);
+            return;
+        }
+
+        let suffix = format!("\",\"sha256\":\"{}\"}}\n", sha256);
+        if let Err(e) = stream.write_all(suffix.as_bytes()) {
+            eprintln!("[file] Failed to write suffix: {}", e);
+            drop(streams_guard);
+            reset_active_transfer(&state, &app_clone, &device_id);
+            return;
+        }
+        let _ = stream.flush();
+
+        println!("[file] Successfully sent '{}' to {}", file_name, device_id);
+        drop(streams_guard);
+        reset_active_transfer(&state, &app_clone, &device_id);
+    });
+}
+
+fn update_send_progress(
+    peer_device_id: &str,
+    bytes_sent: u64,
+    start_time: std::time::Instant,
+    state: &AppState,
+    app: &AppHandle,
+) {
+    let mut transfer = state.active_transfer.lock().unwrap();
+    if let Some(ref mut progress) = *transfer {
+        if progress.device_id == peer_device_id {
+            progress.bytes_received = bytes_sent;
+            let elapsed = start_time.elapsed().as_secs_f64();
+            if elapsed > 0.0 {
+                progress.speed_bytes_per_sec = (bytes_sent as f64) / elapsed;
+            }
+            progress.status = "Sending".to_string();
+            let _ = app.emit("file-transfer-progress", progress.clone());
+            
+            let progress_pct = if progress.total_bytes > 0 {
+                (progress.bytes_received as f64 / progress.total_bytes as f64 * 100.0).min(100.0)
+            } else {
+                0.0
+            };
+            update_tray_progress(app, progress_pct);
+        }
     }
+}
+
+fn reset_active_transfer(state: &AppState, app: &AppHandle, device_id: &str) {
+    {
+        let mut transfer = state.active_transfer.lock().unwrap();
+        *transfer = None;
+    }
+    let _ = refresh_tray_menu(app);
+    let _ = app.emit("file-transfer-finished", device_id);
+    restore_default_tray_icon(app);
 }
 
 /// Entry point invoked from `main.rs` (and the mobile entry point).
@@ -495,7 +679,7 @@ pub fn run() {
                         };
                         
                         if let Some(path_str) = file_path {
-                            send_file_to_device(&path_str, device_id, &state);
+                            send_file_to_device(&path_str, device_id, &state, app);
                         }
                     }
                     id if id.starts_with("pick_files:") => {
@@ -509,7 +693,7 @@ pub fn run() {
                                     let state = app_handle.state::<AppState>();
                                     for path in paths {
                                         let path_str = path.to_string();
-                                        send_file_to_device(&path_str, &device_id, &state);
+                                        send_file_to_device(&path_str, &device_id, &state, &app_handle);
                                     }
                                 }
                             });

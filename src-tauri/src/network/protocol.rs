@@ -67,6 +67,10 @@ pub enum ServerMessage {
         base64_data: String,
         sha256: String,
     },
+    FileTransferStart {
+        filename: String,
+        total_bytes: u64,
+    },
     MediaState(crate::system::media::MediaState),
     SystemVolumeUpdate {
         volume: f64,
