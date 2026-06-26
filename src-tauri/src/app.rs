@@ -269,11 +269,93 @@ pub fn update_tray_progress(app: &AppHandle, progress_pct: f64) {
     }
 }
 
+pub fn generate_logo_image(width: u32, height: u32, is_dark_theme: bool) -> tauri::image::Image<'static> {
+    let mut rgba = vec![0u8; (width * height * 4) as usize];
+    
+    // Scale factors based on 120x120 viewBox
+    let scale_x = width as f64 / 120.0;
+    let scale_y = height as f64 / 120.0;
+    
+    let cx = 60.0 * scale_x;
+    let cy = 86.0 * scale_y;
+    
+    let r1 = 53.0 * scale_x;
+    let r2 = 27.0 * scale_x;
+    let r3 = 6.0 * scale_x;
+    
+    let w = 10.0 * scale_x;
+    let half_w = w / 2.0;
+    
+    // Color: White for dark theme, `#151515` (21, 21, 21) for light theme
+    let (r_val, g_val, b_val) = if is_dark_theme {
+        (255, 255, 255)
+    } else {
+        (21, 21, 21)
+    };
+    
+    for y in 0..height {
+        for x in 0..width {
+            let px = x as f64 + 0.5;
+            let py = y as f64 + 0.5;
+            
+            // 1. Center dot
+            let dx = px - cx;
+            let dy = py - cy;
+            let dist_dot = (dx * dx + dy * dy).sqrt();
+            let intensity_dot = (r3 + 0.5 - dist_dot).clamp(0.0, 1.0);
+            
+            // 2. Inner wave (r2)
+            let dist_wave2 = if py <= cy {
+                (dist_dot - r2).abs()
+            } else {
+                let dl_x = px - (cx - r2);
+                let dl_y = py - cy;
+                let dr_x = px - (cx + r2);
+                let dr_y = py - cy;
+                let dist_left = (dl_x * dl_x + dl_y * dl_y).sqrt();
+                let dist_right = (dr_x * dr_x + dr_y * dr_y).sqrt();
+                dist_left.min(dist_right)
+            };
+            let intensity_wave2 = (half_w + 0.5 - dist_wave2).clamp(0.0, 1.0);
+            
+            // 3. Outer wave (r1)
+            let dist_wave1 = if py <= cy {
+                (dist_dot - r1).abs()
+            } else {
+                let dl_x = px - (cx - r1);
+                let dl_y = py - cy;
+                let dr_x = px - (cx + r1);
+                let dr_y = py - cy;
+                let dist_left = (dl_x * dl_x + dl_y * dl_y).sqrt();
+                let dist_right = (dr_x * dr_x + dr_y * dr_y).sqrt();
+                dist_left.min(dist_right)
+            };
+            let intensity_wave1 = (half_w + 0.5 - dist_wave1).clamp(0.0, 1.0);
+            
+            // Combine intensities (screen / max)
+            let intensity = intensity_dot.max(intensity_wave2).max(intensity_wave1);
+            
+            if intensity > 0.0 {
+                let idx = ((y * width + x) * 4) as usize;
+                rgba[idx] = r_val;
+                rgba[idx + 1] = g_val;
+                rgba[idx + 2] = b_val;
+                rgba[idx + 3] = (intensity * 255.0) as u8;
+            }
+        }
+    }
+    
+    tauri::image::Image::new_owned(rgba, width, height)
+}
+
 pub fn restore_default_tray_icon(app: &AppHandle) {
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
-        if let Some(icon) = app.default_window_icon() {
-            let _ = tray.set_icon(Some(icon.clone()));
-        }
+        let is_dark = app.get_webview_window("main")
+            .and_then(|w| w.theme().ok())
+            .map(|t| t == tauri::Theme::Dark)
+            .unwrap_or(true);
+        let icon = generate_logo_image(32, 32, is_dark);
+        let _ = tray.set_icon(Some(icon));
     }
 }
 
@@ -622,10 +704,17 @@ pub fn run() {
 
             if let Some(window) = app.get_webview_window("main") {
                 let window_clone = window.clone();
+                let app_handle = app.handle().clone();
                 window.on_window_event(move |event| {
-                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                        api.prevent_close();
-                        window_clone.hide().unwrap();
+                    match event {
+                        tauri::WindowEvent::CloseRequested { api, .. } => {
+                            api.prevent_close();
+                            window_clone.hide().unwrap();
+                        }
+                        tauri::WindowEvent::ThemeChanged(_) => {
+                            restore_default_tray_icon(&app_handle);
+                        }
+                        _ => {}
                     }
                 });
 
@@ -639,8 +728,14 @@ pub fn run() {
 
             populate_tray_menu(app.handle(), &tray_menu).map_err(|e| setup_error(e.to_string()))?;
 
+            let is_dark = app.get_webview_window("main")
+                .and_then(|w| w.theme().ok())
+                .map(|t| t == tauri::Theme::Dark)
+                .unwrap_or(true);
+            let initial_icon = generate_logo_image(32, 32, is_dark);
+
             TrayIconBuilder::with_id(TRAY_ID)
-                .icon(app.default_window_icon().unwrap().clone())
+                .icon(initial_icon)
                 .menu(&tray_menu)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "quit" => {
