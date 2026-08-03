@@ -15,6 +15,7 @@ pub struct TrustedPeerDto {
     pub volume_sync_enabled: bool,
     pub incoming_files_enabled: bool,
     pub terminal_access_enabled: bool,
+    pub audio_streaming_enabled: bool,
 }
 
 #[tauri::command]
@@ -54,6 +55,7 @@ pub async fn list_trusted_peers(state: State<'_, AppState>) -> Result<Vec<Truste
             volume_sync_enabled: peer.volume_sync_enabled,
             incoming_files_enabled: peer.incoming_files_enabled,
             terminal_access_enabled: peer.terminal_access_enabled,
+            audio_streaming_enabled: peer.audio_streaming_enabled,
         })
         .collect();
     Ok(peers)

@@ -8,7 +8,6 @@ import { SettingsModal } from '../components/layout/settings-modal'
 import { PairModal } from '../components/layout/pair-modal'
 import { check } from '@tauri-apps/plugin-updater'
 import { invoke } from '@tauri-apps/api/core'
-import logo from '../assets/logo-full.png'
 
 export const Route = createFileRoute('/')({
   component: RouteComponent,
@@ -93,60 +92,53 @@ function RouteComponent() {
       <header className="top-bar">
         <div className="top-bar-left">
           <div className="top-bar-logo">
-            <img src={logo} alt="Pzync Logo" style={{ width: 20, height: 20, marginRight: 6, objectFit: 'contain' }} />
-            <span className="top-bar-logo-text">Pzync</span>
+            <div className="top-bar-logo-badge">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 120 120"
+                style={{ width: 18, height: 18, color: 'var(--text-primary)' }}
+              >
+                <path
+                  d="M 7 86 A 53 53 0 0 1 113 86"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="10"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M 33 86 A 27 27 0 0 1 87 86"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="10"
+                  strokeLinecap="round"
+                />
+                <circle cx="60" cy="86" r="6" fill="currentColor" />
+              </svg>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span className="top-bar-logo-text" style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.3px', lineHeight: 1.1 }}>Pzync</span>
+              <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.6px', textTransform: 'uppercase', lineHeight: 1 }}>Desktop</span>
+            </div>
           </div>
         </div>
 
         <div className="top-bar-right">
-          {/* Update UI has been moved to a banner below the header */}
-
-          {/* iOS-Style Toggle Switch */}
+          {/* Custom styled pill broadcasting toggle */}
           <button
             onClick={toggleBroadcasting}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              padding: '4px',
-              borderRadius: '999px',
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              marginRight: 8
-            }}
+            className={`broadcasting-toggle ${broadcasting ? 'is-active' : ''}`}
             title={broadcasting ? 'Visible: Click to hide' : 'Hidden: Click to broadcast'}
           >
-            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Visible</span>
-            <div style={{
-              width: 36,
-              height: 20,
-              borderRadius: 10,
-              background: broadcasting ? 'var(--success)' : 'var(--bg-elevated)',
-              border: '1px solid var(--border)',
-              position: 'relative',
-              transition: 'background 0.2s',
-            }}>
-              <div style={{
-                position: 'absolute',
-                top: 1,
-                left: broadcasting ? 17 : 1,
-                width: 16,
-                height: 16,
-                borderRadius: '50%',
-                background: '#fff',
-                transition: 'left 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
-              }} />
-            </div>
+            <span className="status-dot-pulse" />
+            <span>{broadcasting ? 'Visible' : 'Hidden'}</span>
           </button>
 
-          <button className="btn btn-ghost btn-icon" style={{ border: 'none' }} onClick={refreshPeers} title="Refresh peers">
-            <Wifi size={14} strokeWidth={2} />
+          <button className="top-bar-action-btn refresh-btn" onClick={refreshPeers} title="Refresh peers">
+            <Wifi size={14} strokeWidth={2.5} />
           </button>
 
-          <button className="btn btn-ghost btn-icon" style={{ border: 'none' }} onClick={() => setShowSettings(true)} title="Settings">
-            <Settings size={14} strokeWidth={2} />
+          <button className="top-bar-action-btn settings-btn" onClick={() => setShowSettings(true)} title="Settings">
+            <Settings size={14} strokeWidth={2.5} />
           </button>
         </div>
       </header>

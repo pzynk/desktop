@@ -5,6 +5,7 @@ pub mod info;
 pub mod trusted_peers;
 pub mod media;
 pub mod terminal;
+pub mod audio;
 
 pub use device_id::get_or_create_device_id;
 pub use info::{get_local_ip, get_system_name};

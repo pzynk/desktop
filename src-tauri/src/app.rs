@@ -45,6 +45,7 @@ pub struct AppState {
     pub tray_menu: tauri::menu::Menu<tauri::Wry>,
     pub active_transfer: Arc<Mutex<Option<TransferProgress>>>,
     pub terminal_server: Arc<Mutex<Option<crate::system::terminal::TerminalServerManager>>>,
+    pub audio_stream_server: Arc<Mutex<Option<crate::system::audio::AudioStreamServer>>>,
     pub virtual_camera_running: Arc<Mutex<Option<tokio::sync::oneshot::Sender<()>>>>,
     pub latest_camera_frame: Arc<Mutex<Option<Vec<u8>>>>,
 }
@@ -642,6 +643,7 @@ pub fn run() {
                 tray_menu: tray_menu.clone(),
                 active_transfer: Arc::new(Mutex::new(None)),
                 terminal_server: Arc::new(Mutex::new(Some(terminal_server))),
+                audio_stream_server: Arc::new(Mutex::new(None)),
                 virtual_camera_running: Arc::new(Mutex::new(None)),
                 latest_camera_frame: Arc::new(Mutex::new(None)),
             };
@@ -865,6 +867,7 @@ pub fn run() {
             commands::media::set_device_volume_sync,
             commands::device::set_device_incoming_files,
             commands::device::set_device_terminal_access,
+            commands::device::set_device_audio_streaming,
             commands::device::get_active_transfer,
             commands::updater::install_update_linux,
             commands::updater::relaunch_app,

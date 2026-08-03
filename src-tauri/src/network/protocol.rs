@@ -40,6 +40,9 @@ pub enum ClientMessage {
     },
 
     CameraStreamStopped,
+    AudioStreamRequest {
+        start: bool,
+    },
     Unpair,
 }
 
@@ -84,6 +87,10 @@ pub enum ServerMessage {
     },
     StartCameraStream,
     StopCameraStream,
+    AudioStreamInfo {
+        enabled: bool,
+        port: u16,
+    },
     Unpair,
 }
 

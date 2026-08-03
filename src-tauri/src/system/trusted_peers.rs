@@ -24,6 +24,8 @@ pub struct TrustedPeer {
     pub incoming_files_enabled: bool,
     #[serde(default = "default_terminal_access")]
     pub terminal_access_enabled: bool,
+    #[serde(default)]
+    pub audio_streaming_enabled: bool,
 }
 
 fn default_clipboard_sync() -> bool {

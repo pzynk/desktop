@@ -25,6 +25,7 @@ function DeviceRoute() {
     toggleVolumeSync,
     toggleIncomingFiles,
     toggleTerminalAccess,
+    toggleAudioStreaming,
   } = useDeviceSettings(id)
 
   const isWindows = /windows|win32/i.test(navigator.userAgent)
@@ -261,6 +262,11 @@ function DeviceRoute() {
                   title="Terminal Access"
                   description="Allow this device to securely access the command line terminal on your PC."
                   control={<Toggle enabled={peer.terminal_access_enabled} onToggle={toggleTerminalAccess} id="toggle-terminal" />}
+                />
+                <SettingRow
+                  title="Listen Through Mobile"
+                  description="Stream your PC's system audio to this device so you can listen through its speaker or headphones."
+                  control={<Toggle enabled={peer.audio_streaming_enabled} onToggle={toggleAudioStreaming} id="toggle-audio" />}
                 />
                 <SettingRow
                   title="Phone Camera Stream"

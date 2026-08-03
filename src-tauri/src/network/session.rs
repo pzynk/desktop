@@ -230,6 +230,7 @@ fn finish_pair_request(
                     volume_sync_enabled: true,
                     incoming_files_enabled: true,
                     terminal_access_enabled: false,
+                    audio_streaming_enabled: false,
                 })?;
             }
             let _ = ctx.app.emit(PEERS_CHANGED_EVENT, ());
@@ -580,6 +581,30 @@ fn keep_session_open(
                     "streaming": false,
                 }));
             }
+            Ok(ClientMessage::AudioStreamRequest { start }) => {
+                let state = ctx.app.state::<AppState>();
+                let mut audio_server = state.audio_stream_server.lock().unwrap();
+                if start {
+                    if audio_server.is_none() {
+                        match crate::system::audio::AudioStreamServer::start() {
+                            Ok((server, port)) => {
+                                *audio_server = Some(server);
+                                let msg = ServerMessage::AudioStreamInfo { enabled: true, port };
+                                let _ = write_line_json(writer, &msg);
+                            }
+                            Err(e) => {
+                                eprintln!("[tcp] Failed to start audio server: {}", e);
+                                let msg = ServerMessage::AudioStreamInfo { enabled: false, port: 0 };
+                                let _ = write_line_json(writer, &msg);
+                            }
+                        }
+                    }
+                } else {
+                    *audio_server = None;
+                    let msg = ServerMessage::AudioStreamInfo { enabled: false, port: 0 };
+                    let _ = write_line_json(writer, &msg);
+                }
+            }
             Ok(ClientMessage::Unpair) => {
                 println!("[tcp] Received Unpair request from peer");
                 let _ = ctx.trusted_peers.lock().unwrap().remove(&peer_device_id);
@@ -613,6 +638,10 @@ fn keep_session_open(
                 restore_default_tray_icon(&ctx.app);
             }
         }
+    }
+    {
+        let app_state = ctx.app.state::<AppState>();
+        *app_state.audio_stream_server.lock().unwrap() = None;
     }
     result
 }

@@ -34,6 +34,32 @@
   --sidebar-w: 220px;
 }
 
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg-base:       #f8f9fa;
+    --bg-surface:    #f1f3f5;
+    --bg-elevated:   #e9ecef;
+    --bg-card:       #ffffff;
+    --border:        #dee2e6;
+    --border-hover:  #ced4da;
+
+    --accent:        #212529;
+    --accent-glow:   rgba(33,37,41,0.04);
+    --accent-soft:   rgba(33,37,41,0.08);
+    --accent-hover:  #000000;
+
+    --success:       #2ecc71;
+    --success-soft:  rgba(46,204,113,0.12);
+    --danger:        #e74c3c;
+    --danger-soft:   rgba(231,76,60,0.12);
+    --warning:       #f1c40f;
+
+    --text-primary:  #212529;
+    --text-secondary: #495057;
+    --text-tertiary:  #868e96;
+  }
+}
+
 /* ─── Reset / base ────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -59,14 +85,18 @@ html, body, #root {
 
 /* ─── Top Bar ─────────────────────────────────────────── */
 .top-bar {
-  height: 64px;
-  background: var(--bg-surface);
+  height: 68px;
+  background: color-mix(in srgb, var(--bg-surface) 75%, transparent);
+  backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 24px;
   flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
 }
 
 .top-bar-left {
@@ -78,7 +108,36 @@ html, body, #root {
 .top-bar-logo {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+}
+
+.top-bar-logo-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.08));
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+  cursor: pointer;
+}
+.top-bar-logo-badge:hover {
+  transform: translateY(-1px);
+  border-color: var(--text-tertiary);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.12));
+}
+
+@media (prefers-color-scheme: light) {
+  .top-bar-logo-badge {
+    background: linear-gradient(135deg, rgba(0, 0, 0, 0.02), rgba(0, 0, 0, 0.05));
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  }
+  .top-bar-logo-badge:hover {
+    background: linear-gradient(135deg, rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.08));
+  }
 }
 
 .top-bar-logo-icon {
@@ -116,6 +175,114 @@ html, body, #root {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+/* ─── Broadcasting Toggle ──────────────────────────────── */
+.broadcasting-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+.broadcasting-toggle:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  border-color: var(--border-hover);
+  transform: translateY(-1px);
+}
+.broadcasting-toggle:active {
+  transform: translateY(0);
+}
+.broadcasting-toggle.is-active {
+  background: var(--success-soft);
+  border-color: rgba(46, 204, 113, 0.25);
+  color: var(--success);
+  box-shadow: 0 4px 12px rgba(46, 204, 113, 0.1);
+}
+.broadcasting-toggle.is-active:hover {
+  background: rgba(46, 204, 113, 0.18);
+  color: var(--success);
+}
+
+@media (prefers-color-scheme: light) {
+  .broadcasting-toggle:hover {
+    background: rgba(0, 0, 0, 0.03);
+  }
+  .broadcasting-toggle.is-active {
+    background: rgba(46, 204, 113, 0.08);
+    border-color: rgba(46, 204, 113, 0.25);
+  }
+  .broadcasting-toggle.is-active:hover {
+    background: rgba(46, 204, 113, 0.12);
+  }
+}
+
+.status-dot-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+  flex-shrink: 0;
+  transition: background 0.3s ease;
+}
+.broadcasting-toggle.is-active .status-dot-pulse {
+  background: var(--success);
+  box-shadow: 0 0 8px var(--success);
+  animation: pulse-dot-active 2s ease infinite;
+}
+
+@keyframes pulse-dot-active {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.15); opacity: 0.7; }
+}
+
+/* ─── Circular Action Button ────────────────────────────── */
+.top-bar-action-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+.top-bar-action-btn:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  border-color: var(--border-hover);
+  transform: translateY(-1px);
+}
+.top-bar-action-btn:active {
+  transform: translateY(0);
+}
+.top-bar-action-btn svg {
+  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.top-bar-action-btn:hover svg {
+  transform: scale(1.08);
+}
+.top-bar-action-btn.refresh-btn:hover svg {
+  transform: rotate(180deg) scale(1.08);
+}
+
+@media (prefers-color-scheme: light) {
+  .top-bar-action-btn:hover {
+    background: rgba(0, 0, 0, 0.03);
+  }
 }
 
 .status-dot {

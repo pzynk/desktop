@@ -36,7 +36,7 @@ export function useDeviceSettings(id: string) {
     await invoke('set_device_clipboard_sync', {
       deviceId: id,
       enabled: !peer.clipboard_sync_enabled,
-    }).catch(() => {})
+    }).catch((e) => console.error("set_device_clipboard_sync error:", e))
     refreshPeer()
   }, [id, peer, refreshPeer])
 
@@ -45,7 +45,7 @@ export function useDeviceSettings(id: string) {
     await invoke('set_device_media_controls', {
       deviceId: id,
       enabled: !peer.media_controls_enabled,
-    }).catch(() => {})
+    }).catch((e) => console.error("set_device_media_controls error:", e))
     refreshPeer()
   }, [id, peer, refreshPeer])
 
@@ -54,7 +54,7 @@ export function useDeviceSettings(id: string) {
     await invoke('set_device_volume_sync', {
       deviceId: id,
       enabled: !peer.volume_sync_enabled,
-    }).catch(() => {})
+    }).catch((e) => console.error("set_device_volume_sync error:", e))
     refreshPeer()
   }, [id, peer, refreshPeer])
 
@@ -63,7 +63,7 @@ export function useDeviceSettings(id: string) {
     await invoke('set_device_incoming_files', {
       deviceId: id,
       enabled: !peer.incoming_files_enabled,
-    }).catch(() => {})
+    }).catch((e) => console.error("set_device_incoming_files error:", e))
     refreshPeer()
   }, [id, peer, refreshPeer])
 
@@ -72,7 +72,16 @@ export function useDeviceSettings(id: string) {
     await invoke('set_device_terminal_access', {
       deviceId: id,
       enabled: !peer.terminal_access_enabled,
-    }).catch(() => {})
+    }).catch((e) => console.error("set_device_terminal_access error:", e))
+    refreshPeer()
+  }, [id, peer, refreshPeer])
+
+  const toggleAudioStreaming = useCallback(async () => {
+    if (!peer) return
+    await invoke('set_device_audio_streaming', {
+      deviceId: id,
+      enabled: !peer.audio_streaming_enabled,
+    }).catch((e) => console.error("set_device_audio_streaming error:", e))
     refreshPeer()
   }, [id, peer, refreshPeer])
 
@@ -84,5 +93,6 @@ export function useDeviceSettings(id: string) {
     toggleVolumeSync,
     toggleIncomingFiles,
     toggleTerminalAccess,
+    toggleAudioStreaming,
   }
 }

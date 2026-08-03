@@ -17,6 +17,7 @@ export type TrustedPeer = {
   volume_sync_enabled: boolean
   incoming_files_enabled: boolean
   terminal_access_enabled: boolean
+  audio_streaming_enabled: boolean
 }
 
 export function getBrand(name: string) {
