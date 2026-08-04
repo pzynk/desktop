@@ -175,6 +175,7 @@ impl VirtualMicrophone {
     }
 
     fn setup_pulse_modules() -> Result<(Option<String>, Option<String>), String> {
+        cleanup_pulse_modules();
         let sink_out = run_command(
             "pactl",
             &[
@@ -225,6 +226,37 @@ impl VirtualMicrophone {
     }
 }
 
+pub fn cleanup_pulse_modules() {
+    let output = match run_command("pactl", &["list", "modules", "short"]) {
+        Ok(out) => out,
+        Err(_) => return,
+    };
+
+    let mut sources_to_unload = Vec::new();
+    let mut sinks_to_unload = Vec::new();
+
+    for line in output.lines() {
+        if line.contains("SyncMic") || line.contains("SyncMicSink") || line.contains("Sync_Microphone_Sink") {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if !parts.is_empty() {
+                let id = parts[0];
+                if line.contains("module-remap-source") || (parts.len() > 1 && parts[1].contains("remap-source")) {
+                    sources_to_unload.push(id.to_string());
+                } else if line.contains("module-null-sink") || (parts.len() > 1 && parts[1].contains("null-sink")) {
+                    sinks_to_unload.push(id.to_string());
+                }
+            }
+        }
+    }
+
+    for id in sources_to_unload {
+        let _ = run_command("pactl", &["unload-module", &id]);
+    }
+    for id in sinks_to_unload {
+        let _ = run_command("pactl", &["unload-module", &id]);
+    }
+}
+
 impl Drop for VirtualMicrophone {
     fn drop(&mut self) {
         self.running.store(false, Ordering::Relaxed);
@@ -243,5 +275,7 @@ impl Drop for VirtualMicrophone {
         if let Some(ref sink_id) = self.null_sink_id {
             let _ = run_command("pactl", &["unload-module", sink_id]);
         }
+
+        cleanup_pulse_modules();
     }
 }

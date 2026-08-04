@@ -626,6 +626,7 @@ pub fn run() {
             Some(vec!["--minimized"]),
         ))
         .setup(|app| {
+            crate::system::virtual_mic::cleanup_pulse_modules();
             let trusted_peers = Arc::new(Mutex::new(
                 TrustedPeers::load(app.handle()).map_err(setup_error)?,
             ));
@@ -743,6 +744,11 @@ pub fn run() {
                 .menu(&tray_menu)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "quit" => {
+                        let state = app.state::<AppState>();
+                        if let Ok(mut mic_guard) = state.virtual_mic_running.lock() {
+                            *mic_guard = None;
+                        }
+                        crate::system::virtual_mic::cleanup_pulse_modules();
                         app.exit(0);
                     }
                     "show" => {
@@ -884,6 +890,16 @@ pub fn run() {
             commands::mic::set_virtual_mic_muted,
             commands::mic::set_virtual_mic_volume,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| match event {
+            tauri::RunEvent::Exit | tauri::RunEvent::ExitRequested { .. } => {
+                let state = app_handle.state::<AppState>();
+                if let Ok(mut mic_guard) = state.virtual_mic_running.lock() {
+                    *mic_guard = None;
+                }
+                crate::system::virtual_mic::cleanup_pulse_modules();
+            }
+            _ => {}
+        });
 }

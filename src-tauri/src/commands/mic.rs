@@ -112,6 +112,7 @@ pub async fn stop_virtual_mic(
 ) -> Result<(), String> {
     let mut running_guard = state.virtual_mic_running.lock().unwrap();
     *running_guard = None;
+    crate::system::virtual_mic::cleanup_pulse_modules();
     Ok(())
 }
 
