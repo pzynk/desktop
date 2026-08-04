@@ -156,6 +156,67 @@ pub async fn check_system_deps(feature: String) -> Result<Option<MissingDependen
             }
         }
     }
+
+    #[cfg(target_os = "windows")]
+    {
+        use cpal::traits::HostTrait;
+        use cpal::traits::DeviceTrait;
+        use std::process::Command;
+
+        if feature == "mic" {
+            let host = cpal::default_host();
+            let has_vb_cable = host
+                .output_devices()
+                .ok()
+                .map(|mut devs| {
+                    devs.any(|d| {
+                        d.name()
+                            .map(|n| n.contains("CABLE Input") || n.contains("VB-Audio") || n.contains("Virtual"))
+                            .unwrap_or(false)
+                    })
+                })
+                .unwrap_or(false);
+
+            if !has_vb_cable {
+                return Ok(Some(MissingDependency {
+                    feature: "mic".to_string(),
+                    title: "VB-Audio Virtual Cable Required".to_string(),
+                    package: "VBAudio.VBCable".to_string(),
+                    command: "winget install VBAudio.VBCable".to_string(),
+                    description: "Required to route the system 'Sync Microphone' virtual input device audio on Windows.".to_string(),
+                }));
+            }
+        } else if feature == "camera" {
+            let mut cmd = Command::new("reg");
+            cmd.args(&["query", "HKCR\\CLSID\\{A3FCE0F5-3493-419F-958A-ABA1250EC20B}"]);
+            {
+                use std::os::windows::process::CommandExt;
+                cmd.creation_flags(0x08000000);
+            }
+            let is_reg = cmd.output().map(|o| o.status.success()).unwrap_or(false);
+            if !is_reg {
+                return Ok(Some(MissingDependency {
+                    feature: "camera".to_string(),
+                    title: "OBS Virtual Camera Module Required".to_string(),
+                    package: "obs-virtualcam-module64.dll".to_string(),
+                    command: "powershell Start-Process regsvr32 -ArgumentList 'resources\\obs-virtualcam-module64.dll' -Verb RunAs".to_string(),
+                    description: "Required to register the 'Sync Camera' DirectShow virtual webcam driver on Windows.".to_string(),
+                }));
+            }
+        } else if feature == "audio" {
+            let host = cpal::default_host();
+            if host.default_output_device().is_none() {
+                return Ok(Some(MissingDependency {
+                    feature: "audio".to_string(),
+                    title: "Audio Output Device Required".to_string(),
+                    package: "Audio Endpoint".to_string(),
+                    command: "control mmsys.cpl sounds".to_string(),
+                    description: "No active audio playback device found on Windows for audio streaming.".to_string(),
+                }));
+            }
+        }
+    }
+
     let _ = feature;
     Ok(None)
 }

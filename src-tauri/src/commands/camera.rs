@@ -591,17 +591,29 @@ fn prepare_windows_driver(app: &tauri::AppHandle) -> Result<(), String> {
     }
 
     use tauri::path::BaseDirectory;
-    let dll_path = app
+    let mut dll_path = app
         .path()
         .resolve("resources/obs-virtualcam-module64.dll", BaseDirectory::Resource)
-        .map_err(|e| format!("Failed to resolve DLL path: {e}"))?;
+        .ok();
 
-    if !dll_path.exists() {
-        return Err(format!(
-            "Bundled virtual camera module not found at resource path: {:?}",
-            dll_path
-        ));
+    if dll_path.as_ref().map(|p| !p.exists()).unwrap_or(true) {
+        let dev_path = std::path::PathBuf::from("src-tauri/resources/obs-virtualcam-module64.dll");
+        if dev_path.exists() {
+            dll_path = Some(dev_path);
+        } else {
+            let res_path = std::path::PathBuf::from("resources/obs-virtualcam-module64.dll");
+            if res_path.exists() {
+                dll_path = Some(res_path);
+            }
+        }
     }
+
+    let dll_path = match dll_path {
+        Some(p) if p.exists() => p,
+        _ => {
+            return Err("Bundled virtual camera module obs-virtualcam-module64.dll not found.".into());
+        }
+    };
 
     if !registered {
         println!("[camera] Virtual camera driver not registered. Registering and naming...");

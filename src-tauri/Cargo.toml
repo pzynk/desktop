@@ -61,6 +61,7 @@ windows = { version = "0.58", features = [
     "Win32_Foundation",
 ] }
 virtualcam = "0.1.1"
+cpal = "0.15"
 
 
 

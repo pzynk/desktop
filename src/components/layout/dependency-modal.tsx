@@ -23,6 +23,8 @@ export function DependencyModal({ dependency, onClose }: DependencyModalProps) {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const isWindows = typeof navigator !== 'undefined' && /windows|win32/i.test(navigator.userAgent)
+
   return (
     <div className="modal-backdrop">
       <div className="modal-card" style={{ width: '480px' }}>
@@ -56,7 +58,7 @@ export function DependencyModal({ dependency, onClose }: DependencyModalProps) {
 
         <div style={{ marginBottom: '20px' }}>
           <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: '6px' }}>
-            RUN THIS COMMAND IN YOUR LINUX TERMINAL:
+            {isWindows ? 'RUN THIS COMMAND IN POWERSHELL / CMD:' : 'RUN THIS COMMAND IN YOUR LINUX TERMINAL:'}
           </div>
           <div style={{
             position: 'relative',
