@@ -20,6 +20,9 @@ pub enum ClientMessage {
     ClipboardUpdate {
         text: String,
     },
+    ClipboardImage {
+        base64_data: String,
+    },
     MediaCommand {
         command: String,
         value: Option<f64>,
@@ -40,10 +43,28 @@ pub enum ClientMessage {
     },
 
     CameraStreamStopped,
+    MicStreamStarted {
+        port: u16,
+        #[serde(default = "default_sample_rate")]
+        sample_rate: u32,
+        #[serde(default = "default_channels")]
+        channels: u16,
+        #[serde(default)]
+        use_adb: bool,
+    },
+    MicStreamStopped,
     AudioStreamRequest {
         start: bool,
     },
     Unpair,
+}
+
+fn default_sample_rate() -> u32 {
+    44100
+}
+
+fn default_channels() -> u16 {
+    1
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -87,6 +108,8 @@ pub enum ServerMessage {
     },
     StartCameraStream,
     StopCameraStream,
+    StartMicStream,
+    StopMicStream,
     AudioStreamInfo {
         enabled: bool,
         port: u16,

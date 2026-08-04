@@ -1,13 +1,13 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
-import { Wifi, Settings, Rocket, Smartphone } from 'lucide-react'
+import { Wifi, Settings, Rocket, Smartphone, AlertTriangle } from 'lucide-react'
 import { usePeers } from '../hooks/use-peers'
 import { getBrand } from '../utils/device'
 import { DeviceCard } from '../components/ui/device-card'
-import { SettingsModal } from '../components/layout/settings-modal'
 import { PairModal } from '../components/layout/pair-modal'
 import { check } from '@tauri-apps/plugin-updater'
 import { invoke } from '@tauri-apps/api/core'
+import { isEnabled, enable } from '@tauri-apps/plugin-autostart'
 
 export const Route = createFileRoute('/')({
   component: RouteComponent,
@@ -15,10 +15,31 @@ export const Route = createFileRoute('/')({
 
 function RouteComponent() {
   const navigate = useNavigate({ from: Route.fullPath })
-  const [showSettings, setShowSettings] = useState(false)
   const [updateAvailable, setUpdateAvailable] = useState<any>(null)
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'updating' | 'installing' | 'error'>('idle')
   const [downloadProgress, setDownloadProgress] = useState(0)
+  const [autostartEnabled, setAutostartEnabled] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    const checkAutostart = async () => {
+      try {
+        const enabled = await isEnabled()
+        setAutostartEnabled(enabled)
+      } catch (err) {
+        console.error('Failed to check autostart:', err)
+      }
+    }
+    checkAutostart()
+  }, [])
+
+  const handleEnableAutostart = async () => {
+    try {
+      await enable()
+      setAutostartEnabled(true)
+    } catch (err) {
+      console.error('Failed to enable autostart:', err)
+    }
+  }
 
   useEffect(() => {
     const checkUpdates = async () => {
@@ -137,7 +158,7 @@ function RouteComponent() {
             <Wifi size={14} strokeWidth={2.5} />
           </button>
 
-          <button className="top-bar-action-btn settings-btn" onClick={() => setShowSettings(true)} title="Settings">
+          <button className="top-bar-action-btn settings-btn" onClick={() => navigate({ to: '/settings' })} title="Settings">
             <Settings size={14} strokeWidth={2.5} />
           </button>
         </div>
@@ -192,6 +213,61 @@ function RouteComponent() {
                   Install Update
                 </button>
               )}
+            </div>
+          )}
+
+          {autostartEnabled === false && (
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(234,179,8,0.1) 0%, rgba(245,158,11,0.05) 100%)',
+              border: '1px solid rgba(245,158,11,0.3)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '14px 18px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: 16,
+              boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 'var(--radius-md)',
+                  background: 'rgba(245,158,11,0.15)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--warning)',
+                  flexShrink: 0
+                }}>
+                  <AlertTriangle size={18} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>
+                    Autostart Disabled
+                  </div>
+                  <div style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>
+                    Pzync is not added to startup. Enable autostart so background sync connects automatically on boot.
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={handleEnableAutostart}
+                className="btn"
+                style={{
+                  padding: '6px 14px',
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  background: 'var(--warning)',
+                  color: '#000',
+                  border: 'none',
+                  borderRadius: 'var(--radius-md)',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                Enable Autostart
+              </button>
             </div>
           )}
 
@@ -263,12 +339,6 @@ function RouteComponent() {
         </div>
       </main>
 
-      {/* ─── Settings Modal ───────────────── */}
-      {showSettings && (
-        <SettingsModal onClose={() => setShowSettings(false)} />
-      )}
-
-      {/* ─── Pair Request Modal ───────────── */}
       {currentRequest && (
         <PairModal request={currentRequest} onResolve={resolvePairRequest} />
       )}

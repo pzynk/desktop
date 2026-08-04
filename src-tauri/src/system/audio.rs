@@ -8,7 +8,7 @@ use std::time::Duration;
 
 pub struct AudioStreamServer {
     running: Arc<AtomicBool>,
-    null_sink_id: Option<u32>,
+    pub port: u16,
 }
 
 /// Build a WAV header for an infinite-length stream (data size = 0xFFFFFFFF).
@@ -42,33 +42,12 @@ fn wav_header() -> [u8; 44] {
 }
 
 impl AudioStreamServer {
-    pub fn start() -> Result<(Self, u16), String> {
-        let mut null_sink_id = None;
-        let output = Command::new("pactl")
-            .arg("load-module")
-            .arg("module-null-sink")
-            .arg("sink_name=MobileStream")
-            .arg("sink_properties=device.description=\"Mobile_Stream\"")
-            .output();
-
-        if let Ok(out) = output {
-            if out.status.success() {
-                let id_str = String::from_utf8_lossy(&out.stdout);
-                if let Ok(id) = id_str.trim().parse::<u32>() {
-                    null_sink_id = Some(id);
-                    println!("[audio] Loaded null sink module {}", id);
-                }
-            } else {
-                eprintln!("[audio] Failed to load null sink: {}", String::from_utf8_lossy(&out.stderr));
-            }
-        }
-
+    pub fn start() -> Result<Self, String> {
         let listener = TcpListener::bind("0.0.0.0:0").map_err(|e| format!("Bind failed: {e}"))?;
         let port = listener.local_addr().map_err(|e| e.to_string())?.port();
         listener.set_nonblocking(true).map_err(|e| format!("Set nonblocking failed: {e}"))?;
         let running = Arc::new(AtomicBool::new(true));
         let running_clone = running.clone();
-        let use_null_sink = null_sink_id.is_some();
 
         thread::spawn(move || {
             loop {
@@ -78,6 +57,7 @@ impl AudioStreamServer {
                 match listener.accept() {
                     Ok((mut socket, addr)) => {
                         socket.set_nonblocking(false).ok();
+                        socket.set_nodelay(true).ok(); // Extremely important for low latency
                         println!("[audio] Client connected from {addr}");
 
                         // Send HTTP response with WAV content type.
@@ -96,11 +76,7 @@ impl AudioStreamServer {
                             continue;
                         }
 
-                        let monitor = if use_null_sink {
-                            "MobileStream.monitor"
-                        } else {
-                            "@DEFAULT_SINK@.monitor"
-                        };
+                        let monitor = "@DEFAULT_SINK@.monitor";
 
                         // parec outputs raw PCM (s16le, stereo, 44100 Hz).
                         // Works on PulseAudio and PipeWire (via PulseAudio compat).
@@ -108,6 +84,8 @@ impl AudioStreamServer {
                             .arg("--rate=44100")
                             .arg("--channels=2")
                             .arg("--format=s16le")
+                            .arg("--latency-msec=5")
+                            .arg("--process-time-msec=5")
                             .arg("-d")
                             .arg(monitor)
                             .stdout(Stdio::piped())
@@ -133,7 +111,7 @@ impl AudioStreamServer {
 
                         let r_clone = running_clone.clone();
                         thread::spawn(move || {
-                            let mut buf = [0u8; 4096];
+                            let mut buf = [0u8; 512];
                             use std::io::Read;
                             while r_clone.load(Ordering::Relaxed) {
                                 match parec_out.read(&mut buf) {
@@ -142,6 +120,7 @@ impl AudioStreamServer {
                                         if socket.write_all(&buf[..n]).is_err() {
                                             break;
                                         }
+                                        socket.flush().ok();
                                     }
                                     Err(e) => {
                                         eprintln!("[audio] Read error: {e}");
@@ -166,7 +145,7 @@ impl AudioStreamServer {
         });
 
         println!("[audio] AudioStreamServer started on port {port}");
-        Ok((Self { running, null_sink_id }, port))
+        Ok(Self { running, port })
     }
 }
 
@@ -174,12 +153,5 @@ impl Drop for AudioStreamServer {
     fn drop(&mut self) {
         println!("[audio] AudioStreamServer stopping");
         self.running.store(false, Ordering::Relaxed);
-        if let Some(id) = self.null_sink_id {
-            let _ = Command::new("pactl")
-                .arg("unload-module")
-                .arg(id.to_string())
-                .output();
-            println!("[audio] Unloaded null sink module {}", id);
-        }
     }
 }

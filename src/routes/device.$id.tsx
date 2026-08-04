@@ -2,12 +2,13 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
 import { listen } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
-import { ChevronLeft, Server, Clock } from 'lucide-react'
+import { ChevronLeft, Server, Clock, Mic, MicOff, Volume2 } from 'lucide-react'
 import { Toggle } from '../components/ui/toggle'
 import { SectionHeader } from '../components/ui/section-header'
 import { SettingRow } from '../components/ui/setting-row'
 import { useDeviceSettings } from '../hooks/use-device-settings'
 import { getBrand, relativeTime } from '../utils/device'
+import { DependencyModal, MissingDependency } from '../components/layout/dependency-modal'
 
 export const Route = createFileRoute('/device/$id')({
   component: DeviceRoute,
@@ -17,6 +18,7 @@ function DeviceRoute() {
   const { id } = Route.useParams()
   const navigate = useNavigate({ from: Route.fullPath })
   const [confirming, setConfirming] = useState(false)
+  const [missingDependency, setMissingDependency] = useState<MissingDependency | null>(null)
   const {
     peer,
     unpairPeer,
@@ -41,6 +43,13 @@ function DeviceRoute() {
   const [, setErrorCount] = useState(0)
   const [virtualCameraActive, setVirtualCameraActive] = useState(false)
   const [virtualCameraError, setVirtualCameraError] = useState<string | null>(null)
+
+  const [micStreaming, setMicStreaming] = useState(false)
+  const [_virtualMicActive, setVirtualMicActive] = useState(false)
+  const [_virtualMicError, setVirtualMicError] = useState<string | null>(null)
+  const [micAudioLevel, setMicAudioLevel] = useState(0)
+  const [micMuted, setMicMuted] = useState(false)
+  const [micVolume, setMicVolume] = useState(1.0)
 
   useEffect(() => {
     const unlistenStart = listen<string>('file-transfer-started', (event) => {
@@ -97,13 +106,74 @@ function DeviceRoute() {
       }
     )
 
+    const unlistenMic = listen<{ streaming: boolean; ip?: string; port?: number; sample_rate?: number; channels?: number; use_adb?: boolean }>(
+      'mic-stream-state-changed',
+      (event) => {
+        const payload = event.payload
+        setMicStreaming(payload.streaming)
+        if (payload.streaming && payload.ip && payload.port) {
+          const useAdb = payload.use_adb ?? false
+          invoke('start_virtual_mic', {
+            ip: payload.ip,
+            port: payload.port,
+            sampleRate: payload.sample_rate || 44100,
+            channels: payload.channels || 1,
+            useAdb,
+          }).catch((e) => console.error('Failed to start virtual mic:', e))
+        } else {
+          invoke('stop_virtual_mic').catch((e) => console.error('Failed to stop virtual mic:', e))
+        }
+      }
+    )
+
+    const unlistenVirtualMic = listen<{ active: boolean; error: string | null }>(
+      'virtual-mic-state-changed',
+      (event) => {
+        setVirtualMicActive(event.payload.active)
+        setVirtualMicError(event.payload.error)
+      }
+    )
+
+    const unlistenAudioLevel = listen<number>('mic-audio-level', (event) => {
+      setMicAudioLevel(event.payload)
+    })
+
     return () => {
       unlistenStart.then((fn) => fn()).catch(() => {})
       unlistenFinish.then((fn) => fn()).catch(() => {})
       unlistenCamera.then((fn) => fn()).catch(() => {})
       unlistenVirtualCamera.then((fn) => fn()).catch(() => {})
+      unlistenMic.then((fn) => fn()).catch(() => {})
+      unlistenVirtualMic.then((fn) => fn()).catch(() => {})
+      unlistenAudioLevel.then((fn) => fn()).catch(() => {})
     }
   }, [id])
+
+  const toggleMicStream = async () => {
+    const next = !micStreaming
+    setVirtualMicError(null)
+    if (next) {
+      const missing = await invoke<MissingDependency | null>('check_system_deps', { feature: 'mic' }).catch(() => null)
+      if (missing) {
+        setMissingDependency(missing)
+        return
+      }
+    }
+    await invoke('toggle_mic_stream', { deviceId: id, start: next }).catch((e) => {
+      console.error('Failed to toggle mic stream:', e)
+    })
+  }
+
+  const toggleMicMute = async () => {
+    const next = !micMuted
+    setMicMuted(next)
+    await invoke('set_virtual_mic_muted', { muted: next }).catch((e) => console.error(e))
+  }
+
+  const handleMicVolumeChange = async (v: number) => {
+    setMicVolume(v)
+    await invoke('set_virtual_mic_volume', { volume: v }).catch((e) => console.error(e))
+  }
 
   const toggleCameraStream = async () => {
     const nextState = !cameraStreaming
@@ -113,6 +183,13 @@ function DeviceRoute() {
     setErrorCount(0)
     setVirtualCameraActive(false)
     setVirtualCameraError(null)
+    if (nextState) {
+      const missing = await invoke<MissingDependency | null>('check_system_deps', { feature: 'camera' }).catch(() => null)
+      if (missing) {
+        setMissingDependency(missing)
+        return
+      }
+    }
     await invoke('toggle_camera_stream', { deviceId: id, start: nextState }).catch((e) => {
       console.error('Failed to toggle camera stream:', e)
     })
@@ -566,6 +643,127 @@ function DeviceRoute() {
             )}
 
 
+            {/* System Virtual Microphone */}
+            <section>
+              <SectionHeader
+                title="Virtual Microphone"
+                description="Use your phone's microphone as a system input device for Google Meet, Zoom, Teams, and Discord."
+              />
+              <div style={{
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-lg)',
+                padding: '20px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '16px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 'var(--radius-md)',
+                      background: micStreaming ? 'rgba(59, 130, 246, 0.15)' : 'var(--bg-elevated)',
+                      color: micStreaming ? 'var(--accent)' : 'var(--text-tertiary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      {micStreaming ? <Mic width={20} height={20} /> : <MicOff width={20} height={20} />}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                        Phone Microphone
+                      </div>
+                      <div style={{ fontSize: '12.5px', color: 'var(--text-tertiary)' }}>
+                        {micStreaming ? 'Streaming active to system virtual input device' : 'Turn on to stream audio from phone mic'}
+                      </div>
+                    </div>
+                  </div>
+                  <Toggle enabled={micStreaming} onToggle={toggleMicStream} id="toggle-mic" />
+                </div>
+
+                {micStreaming && (
+                  <div style={{
+                    background: 'var(--bg-base)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '14px',
+                    border: '1px solid var(--border)'
+                  }}>
+                    {/* Live Level Meter */}
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                        <span>Audio Input Level</span>
+                        <span>{Math.round(micAudioLevel * 100)}%</span>
+                      </div>
+                      <div style={{
+                        height: '8px',
+                        background: 'var(--bg-elevated)',
+                        borderRadius: '4px',
+                        overflow: 'hidden'
+                      }}>
+                        <div style={{
+                          height: '100%',
+                          width: `${Math.min(100, Math.max(0, micAudioLevel * 100))}%`,
+                          background: micAudioLevel > 0.85 ? 'var(--danger)' : 'var(--accent)',
+                          transition: 'width 60ms ease-out'
+                        }} />
+                      </div>
+                    </div>
+
+                    {/* Mute & Gain controls */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                      <button
+                        className={`btn ${micMuted ? 'btn-danger' : 'btn-ghost'}`}
+                        onClick={toggleMicMute}
+                        style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px' }}
+                      >
+                        {micMuted ? <MicOff width={16} height={16} /> : <Mic width={16} height={16} />}
+                        <span>{micMuted ? 'Muted' : 'Mute'}</span>
+                      </button>
+
+                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <Volume2 width={16} height={16} style={{ color: 'var(--text-tertiary)' }} />
+                        <input
+                          type="range"
+                          min="0"
+                          max="2"
+                          step="0.05"
+                          value={micVolume}
+                          onChange={(e) => handleMicVolumeChange(parseFloat(e.target.value))}
+                          style={{ flex: 1, accentColor: 'var(--accent)' }}
+                        />
+                        <span style={{ fontSize: '12px', color: 'var(--text-tertiary)', width: '36px' }}>
+                          {Math.round(micVolume * 100)}%
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Device Badge */}
+                    <div style={{
+                      background: 'rgba(16, 185, 129, 0.1)',
+                      border: '1px solid rgba(16, 185, 129, 0.2)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '10px 14px',
+                      fontSize: '12.5px',
+                      color: 'var(--text-secondary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px'
+                    }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981' }} />
+                      <span>Appears in System Sound Settings, Google Meet, Zoom as <strong style={{ color: '#10b981' }}>Sync Microphone</strong></span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+
+
             {/* Danger Zone */}
             <section>
               <SectionHeader
@@ -600,6 +798,12 @@ function DeviceRoute() {
           </div>
         </div>
       </div>
+      {missingDependency && (
+        <DependencyModal
+          dependency={missingDependency}
+          onClose={() => setMissingDependency(null)}
+        />
+      )}
     </div>
   )
 }

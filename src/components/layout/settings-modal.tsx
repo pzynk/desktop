@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
 import { invoke } from '@tauri-apps/api/core'
 import { getVersion } from '@tauri-apps/api/app'
+import { isEnabled, enable, disable } from '@tauri-apps/plugin-autostart'
 
 interface SettingsModalProps {
   onClose: () => void
@@ -11,12 +12,29 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const [ip, setIp] = useState<string | null>(null)
   const [name, setName] = useState<string | null>(null)
   const [version, setVersion] = useState<string>('…')
+  const [autostart, setAutostart] = useState<boolean | null>(null)
 
   useEffect(() => {
     invoke<string>('get_device_ip').then(setIp).catch(() => {})
     invoke<string>('get_device_name').then(setName).catch(() => {})
     getVersion().then(setVersion).catch(() => {})
+    isEnabled().then(setAutostart).catch(() => {})
   }, [])
+
+  const toggleAutostart = async () => {
+    if (autostart === null) return
+    try {
+      if (autostart) {
+        await disable()
+        setAutostart(false)
+      } else {
+        await enable()
+        setAutostart(true)
+      }
+    } catch (err) {
+      console.error('Failed to toggle autostart:', err)
+    }
+  }
 
   return (
     <div className="modal-backdrop">
@@ -45,13 +63,13 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
               { label: 'TCP Port', value: '7891' },
               { label: 'Version', value: version },
               { label: 'Protocol', value: 'TCP + UDP Discovery' },
-            ].map((row, i, arr) => (
+            ].map((row) => (
               <div key={row.label} style={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 padding: '12px 16px',
-                borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none',
+                borderBottom: '1px solid var(--border)',
               }}>
                 <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{row.label}</span>
                 <span style={{
@@ -61,6 +79,31 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 }}>{row.value}</span>
               </div>
             ))}
+
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '12px 16px',
+            }}>
+              <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Run at Startup</span>
+              <button
+                onClick={toggleAutostart}
+                className="btn"
+                style={{
+                  padding: '4px 10px',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  background: autostart ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
+                  color: autostart ? 'var(--success)' : 'var(--danger)',
+                  border: `1px solid ${autostart ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                  borderRadius: 'var(--radius-sm)',
+                  cursor: 'pointer',
+                }}
+              >
+                {autostart === null ? '…' : autostart ? 'Enabled' : 'Disabled'}
+              </button>
+            </div>
           </div>
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 24 }}>

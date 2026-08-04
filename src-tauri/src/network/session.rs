@@ -287,6 +287,43 @@ fn keep_session_open(
         }
     }
 
+    {
+        let is_audio_enabled = ctx
+            .trusted_peers
+            .lock()
+            .unwrap()
+            .get(&peer_device_id)
+            .map(|p| p.audio_streaming_enabled)
+            .unwrap_or(false);
+
+        if is_audio_enabled {
+            let app_state = ctx.app.state::<AppState>();
+            let mut audio_server = app_state.audio_stream_server.lock().unwrap();
+            let port_opt = if audio_server.is_none() {
+                match crate::system::audio::AudioStreamServer::start() {
+                    Ok(server) => {
+                        let port = server.port;
+                        *audio_server = Some(server);
+                        Some(port)
+                    }
+                    Err(e) => {
+                        eprintln!("[audio] Failed to start audio server on connect: {}", e);
+                        None
+                    }
+                }
+            } else {
+                audio_server.as_ref().map(|s| s.port)
+            };
+
+            if let Some(port) = port_opt {
+                let msg = ServerMessage::AudioStreamInfo { enabled: true, port };
+                if let Ok(mut w) = writer_clone.lock() {
+                    let _ = write_line_json(&mut *w, &msg);
+                }
+            }
+        }
+    }
+
     let peer_id_for_term = peer_device_id.clone();
     let app_for_term = ctx.app.clone();
     let writer_for_term = writer_clone.clone();
@@ -495,6 +532,35 @@ fn keep_session_open(
                     println!("[tcp] Ignored clipboard update from peer (sync disabled)");
                 }
             }
+            Ok(ClientMessage::ClipboardImage { base64_data }) => {
+                let is_sync_enabled = ctx
+                    .trusted_peers
+                    .lock()
+                    .unwrap()
+                    .get(&peer_device_id)
+                    .map(|p| p.clipboard_sync_enabled)
+                    .unwrap_or(false);
+                if is_sync_enabled {
+                    println!(
+                        "[tcp] Received clipboard image update from peer: {} bytes base64",
+                        base64_data.len()
+                    );
+                    if let Ok(bytes) = STANDARD.decode(&base64_data) {
+                        use clipboard_rs::common::RustImage;
+                        if let Ok(image_data) = clipboard_rs::RustImageData::from_bytes(&bytes) {
+                            if let Ok(clipboard_ctx) = clipboard_rs::ClipboardContext::new() {
+                                use clipboard_rs::Clipboard;
+                                let _ = clipboard_ctx.set_image(image_data);
+                                println!("[tcp] Successfully set image to desktop clipboard");
+                            }
+                        } else {
+                            eprintln!("[tcp] Failed to parse image data from peer clipboard message");
+                        }
+                    }
+                } else {
+                    println!("[tcp] Ignored clipboard image from peer (sync disabled)");
+                }
+            }
             Ok(ClientMessage::MediaCommand { command, value }) => {
                 let media_enabled = ctx
                     .trusted_peers
@@ -581,16 +647,52 @@ fn keep_session_open(
                     "streaming": false,
                 }));
             }
+            Ok(ClientMessage::MicStreamStarted { port, sample_rate, channels, use_adb }) => {
+                println!("[tcp] Received MicStreamStarted from peer");
+                let peer_ip = reader.get_ref().peer_addr().map(|a| a.ip().to_string()).unwrap_or_default();
+                let _ = ctx.app.emit("mic-stream-state-changed", serde_json::json!({
+                    "streaming": true,
+                    "ip": peer_ip,
+                    "port": port,
+                    "sample_rate": sample_rate,
+                    "channels": channels,
+                    "use_adb": use_adb,
+                }));
+            }
+            Ok(ClientMessage::MicStreamStopped) => {
+                println!("[tcp] Received MicStreamStopped from peer");
+                let _ = ctx.app.emit("mic-stream-state-changed", serde_json::json!({
+                    "streaming": false,
+                }));
+            }
             Ok(ClientMessage::AudioStreamRequest { start }) => {
+                let peer_name = {
+                    let mut peers = ctx.trusted_peers.lock().unwrap();
+                    let name = peers.get(&peer_device_id).map(|p| p.name.clone()).unwrap_or_default();
+                    if let Some(peer) = peers.get(&peer_device_id) {
+                        let mut updated = peer.clone();
+                        updated.audio_streaming_enabled = start;
+                        let _ = peers.upsert(updated);
+                    }
+                    name
+                };
+                let _ = ctx.app.emit(crate::app::PEERS_CHANGED_EVENT, ());
+
                 let state = ctx.app.state::<AppState>();
                 let mut audio_server = state.audio_stream_server.lock().unwrap();
                 if start {
                     if audio_server.is_none() {
                         match crate::system::audio::AudioStreamServer::start() {
-                            Ok((server, port)) => {
+                            Ok(server) => {
+                                let port = server.port;
                                 *audio_server = Some(server);
                                 let msg = ServerMessage::AudioStreamInfo { enabled: true, port };
                                 let _ = write_line_json(writer, &msg);
+                                
+                                let _ = notify_rust::Notification::new()
+                                    .summary("Listen Through Mobile")
+                                    .body(&format!("Audio is now streaming to {}", peer_name))
+                                    .show();
                             }
                             Err(e) => {
                                 eprintln!("[tcp] Failed to start audio server: {}", e);
@@ -598,6 +700,15 @@ fn keep_session_open(
                                 let _ = write_line_json(writer, &msg);
                             }
                         }
+                    } else {
+                        // Already started, but still show a notification and send info
+                        let port = audio_server.as_ref().unwrap().port;
+                        let msg = ServerMessage::AudioStreamInfo { enabled: true, port };
+                        let _ = write_line_json(writer, &msg);
+                        let _ = notify_rust::Notification::new()
+                            .summary("Listen Through Mobile")
+                            .body(&format!("Audio is now streaming to {}", peer_name))
+                            .show();
                     }
                 } else {
                     *audio_server = None;

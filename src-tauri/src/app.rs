@@ -48,6 +48,7 @@ pub struct AppState {
     pub audio_stream_server: Arc<Mutex<Option<crate::system::audio::AudioStreamServer>>>,
     pub virtual_camera_running: Arc<Mutex<Option<tokio::sync::oneshot::Sender<()>>>>,
     pub latest_camera_frame: Arc<Mutex<Option<Vec<u8>>>>,
+    pub virtual_mic_running: Arc<Mutex<Option<crate::system::virtual_mic::VirtualMicrophone>>>,
 }
 
 impl AppState {
@@ -646,6 +647,7 @@ pub fn run() {
                 audio_stream_server: Arc::new(Mutex::new(None)),
                 virtual_camera_running: Arc::new(Mutex::new(None)),
                 latest_camera_frame: Arc::new(Mutex::new(None)),
+                virtual_mic_running: Arc::new(Mutex::new(None)),
             };
             start_background_services(app.handle(), &state).map_err(setup_error)?;
             let last_clipboard_clone = state.last_clipboard.clone();
@@ -869,12 +871,18 @@ pub fn run() {
             commands::device::set_device_terminal_access,
             commands::device::set_device_audio_streaming,
             commands::device::get_active_transfer,
+            commands::device::check_system_deps,
             commands::updater::install_update_linux,
             commands::updater::relaunch_app,
             commands::camera::toggle_camera_stream,
             commands::camera::start_virtual_camera,
             commands::camera::stop_virtual_camera,
             commands::camera::get_latest_frame,
+            commands::mic::toggle_mic_stream,
+            commands::mic::start_virtual_mic,
+            commands::mic::stop_virtual_mic,
+            commands::mic::set_virtual_mic_muted,
+            commands::mic::set_virtual_mic_volume,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
