@@ -225,6 +225,7 @@ pub async fn check_system_deps(feature: String) -> Result<Option<MissingDependen
 
 #[tauri::command]
 pub async fn auto_install_system_dep(app: tauri::AppHandle, feature: String) -> Result<(), String> {
+    let _ = &app;
     #[cfg(target_os = "windows")]
     {
         use std::process::Command;

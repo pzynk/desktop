@@ -745,6 +745,16 @@ pub fn is_driver_registered() -> bool {
 }
 
 #[cfg(target_os = "linux")]
+fn is_linux_driver_registered() -> bool {
+    std::path::Path::new("/dev/video9").exists()
+}
+
+#[cfg(target_os = "macos")]
+fn is_macos_driver_registered() -> bool {
+    false
+}
+
+#[cfg(target_os = "linux")]
 fn prepare_linux_driver() -> Result<(), String> {
     if !std::path::Path::new("/dev/video9").exists() {
         println!("[camera] /dev/video9 does not exist. Loading v4l2loopback module...");
