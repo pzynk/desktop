@@ -42,6 +42,9 @@ pub struct AppState {
     pub active_streams: Arc<Mutex<HashMap<String, std::net::TcpStream>>>,
     pub last_clipboard: Arc<Mutex<String>>,
     pub copied_files: Arc<Mutex<Vec<String>>>,
+    /// Serializes all OS-level clipboard access (polling thread vs image writes).
+    /// On Windows, only one thread can hold the clipboard open at a time.
+    pub clipboard_lock: Arc<Mutex<()>>,
     pub tray_menu: tauri::menu::Menu<tauri::Wry>,
     pub active_transfer: Arc<Mutex<Option<TransferProgress>>>,
     pub terminal_server: Arc<Mutex<Option<crate::system::terminal::TerminalServerManager>>>,
@@ -84,6 +87,7 @@ fn start_background_services(app: &tauri::AppHandle, state: &AppState) -> Result
             active_connections: state.active_connections.clone(),
             active_streams: state.active_streams.clone(),
             last_clipboard: state.last_clipboard.clone(),
+            clipboard_lock: state.clipboard_lock.clone(),
         },
     );
     Ok(())
@@ -642,6 +646,7 @@ pub fn run() {
                 active_streams: Arc::new(Mutex::new(HashMap::new())),
                 last_clipboard: Arc::new(Mutex::new(String::new())),
                 copied_files: Arc::new(Mutex::new(Vec::new())),
+                clipboard_lock: Arc::new(Mutex::new(())),
                 tray_menu: tray_menu.clone(),
                 active_transfer: Arc::new(Mutex::new(None)),
                 terminal_server: Arc::new(Mutex::new(Some(terminal_server))),
@@ -653,6 +658,7 @@ pub fn run() {
             start_background_services(app.handle(), &state).map_err(setup_error)?;
             let last_clipboard_clone = state.last_clipboard.clone();
             let copied_files_clone = state.copied_files.clone();
+            let clipboard_lock_clone = state.clipboard_lock.clone();
             app.manage(state);
 
             let app_handle = app.handle().clone();
@@ -661,6 +667,11 @@ pub fn run() {
                 let clipboard_ctx = ClipboardContext::new().unwrap();
                 loop {
                     std::thread::sleep(std::time::Duration::from_millis(200));
+                    // Hold clipboard_lock for the entire poll cycle so that any concurrent
+                    // image write (session.rs) waits until we release before calling
+                    // OpenClipboard. This prevents OSError 1418 on Windows.
+                    let _lock = clipboard_lock_clone.lock().unwrap();
+
                     // 1. Text polling
                     if let Ok(text) = clipboard_ctx.get_text() {
                         let mut last = last_clipboard_clone.lock().unwrap();
@@ -699,6 +710,9 @@ pub fn run() {
                         }
                         // lock is dropped here
                     };
+                    // Release clipboard_lock before refreshing the tray (no clipboard access there)
+                    drop(_lock);
+
                     if should_refresh {
                         if let Err(e) = refresh_tray_menu(&app_handle_for_files) {
                             eprintln!("[clipboard] Failed to refresh tray menu: {e}");
@@ -878,12 +892,17 @@ pub fn run() {
             commands::device::set_device_audio_streaming,
             commands::device::get_active_transfer,
             commands::device::check_system_deps,
+            commands::device::auto_install_system_dep,
             commands::updater::install_update_linux,
             commands::updater::relaunch_app,
+            commands::camera::get_camera_stream_state,
             commands::camera::toggle_camera_stream,
+            commands::camera::update_camera_config,
+            commands::camera::request_camera_config,
             commands::camera::start_virtual_camera,
             commands::camera::stop_virtual_camera,
             commands::camera::get_latest_frame,
+            commands::mic::get_mic_stream_state,
             commands::mic::toggle_mic_stream,
             commands::mic::start_virtual_mic,
             commands::mic::stop_virtual_mic,

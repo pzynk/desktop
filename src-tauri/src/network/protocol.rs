@@ -56,6 +56,14 @@ pub enum ClientMessage {
     AudioStreamRequest {
         start: bool,
     },
+    CameraConfigState {
+        is_front: bool,
+        resolution: String,
+        fps: i32,
+        rotation: i32,
+        #[serde(default)]
+        use_adb: bool,
+    },
     Unpair,
 }
 
@@ -108,6 +116,19 @@ pub enum ServerMessage {
     },
     StartCameraStream,
     StopCameraStream,
+    UpdateCameraConfig {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        is_front: Option<bool>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        resolution: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        fps: Option<i32>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        rotation: Option<i32>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        use_adb: Option<bool>,
+    },
+    RequestCameraConfig,
     StartMicStream,
     StopMicStream,
     AudioStreamInfo {

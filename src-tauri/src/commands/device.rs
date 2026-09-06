@@ -95,6 +95,8 @@ pub async fn set_device_audio_streaming(
                     }
                     Err(e) => {
                         eprintln!("[audio] Failed to start audio server: {}", e);
+                        let msg = crate::network::protocol::ServerMessage::AudioStreamInfo { enabled: false, port: 0 };
+                        let _ = crate::network::protocol::write_line_json(stream, &msg);
                     }
                 }
             } else {
@@ -219,4 +221,87 @@ pub async fn check_system_deps(feature: String) -> Result<Option<MissingDependen
 
     let _ = feature;
     Ok(None)
+}
+
+#[tauri::command]
+pub async fn auto_install_system_dep(app: tauri::AppHandle, feature: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+        if feature == "camera" {
+            crate::commands::camera::prepare_windows_driver(&app)
+        } else if feature == "mic" {
+            let ps_script = r#"
+                $installed = $false
+                try {
+                    $res = Start-Process winget -ArgumentList 'install', '--id', 'VB-Audio.Voicemeeter', '--accept-source-agreements', '--accept-package-agreements', '--silent' -Wait -PassThru
+                    if ($res.ExitCode -eq 0) { $installed = $true }
+                } catch {}
+
+                if (-not $installed) {
+                    $zip = "$env:TEMP\VoicemeeterSetup.zip"
+                    $dest = "$env:TEMP\VoicemeeterSetup_dir"
+                    Invoke-WebRequest -Uri "https://download.vb-audio.com/Download_CABLE/VoicemeeterSetup_v1122.zip" -OutFile $zip
+                    Expand-Archive -Path $zip -DestinationPath $dest -Force
+                    $exe = (Get-ChildItem $dest -Filter "*Setup*.exe" | Select-Object -First 1).FullName
+                    if ($exe) {
+                        Start-Process $exe -ArgumentList "-i", "-h" -Wait
+                    }
+                }
+            "#;
+
+            let utf16_bytes: Vec<u8> = ps_script
+                .encode_utf16()
+                .flat_map(|u| u.to_le_bytes())
+                .collect();
+            use base64::{engine::general_purpose::STANDARD, Engine as _};
+            let encoded_cmd = STANDARD.encode(&utf16_bytes);
+
+            let status = Command::new("powershell")
+                .args(&[
+                    "-NoProfile",
+                    "-Command",
+                    &format!("Start-Process powershell -ArgumentList '-NoProfile', '-EncodedCommand', '{}' -Verb RunAs -Wait", encoded_cmd),
+                ])
+                .status()
+                .map_err(|e| format!("Failed to launch installer: {e}"))?;
+
+            if !status.success() {
+                return Err("Installation was cancelled or encountered an error.".into());
+            }
+            Ok(())
+        } else {
+            Ok(())
+        }
+    }
+    #[cfg(target_os = "linux")]
+    {
+        use std::process::Command;
+        if feature == "camera" {
+            let status = Command::new("pkexec")
+                .args(&["sh", "-c", "apt-get update && apt-get install -y v4l2loopback-dkms v4l-utils && modprobe v4l2loopback exclusive_caps=1 card_label=\"Sync Camera\" video_nr=9"])
+                .status()
+                .map_err(|e| format!("Failed to run pkexec: {e}"))?;
+            if !status.success() {
+                return Err("Failed to install/load v4l2loopback module.".into());
+            }
+            Ok(())
+        } else if feature == "mic" {
+            let status = Command::new("pkexec")
+                .args(&["sh", "-c", "apt-get update && apt-get install -y pulseaudio-utils"])
+                .status()
+                .map_err(|e| format!("Failed to run pkexec: {e}"))?;
+            if !status.success() {
+                return Err("Failed to install pulseaudio-utils.".into());
+            }
+            Ok(())
+        } else {
+            Ok(())
+        }
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    {
+        let _ = (app, feature);
+        Ok(())
+    }
 }

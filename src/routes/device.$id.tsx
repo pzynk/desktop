@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
 import { listen } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
-import { ChevronLeft, Server, Clock, Mic, MicOff, Volume2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Server, Clock, Mic, MicOff, Volume2, Camera, Video, Sliders } from 'lucide-react'
 import { Toggle } from '../components/ui/toggle'
 import { SectionHeader } from '../components/ui/section-header'
 import { SettingRow } from '../components/ui/setting-row'
@@ -30,19 +30,8 @@ function DeviceRoute() {
     toggleAudioStreaming,
   } = useDeviceSettings(id)
 
-  const isWindows = /windows|win32/i.test(navigator.userAgent)
-  const isMac = /macintosh|mac os x/i.test(navigator.userAgent)
-
   const [transferring, setTransferring] = useState(false)
   const [cameraStreaming, setCameraStreaming] = useState(false)
-  const [cameraIp, setCameraIp] = useState('')
-  const [cameraPort, setCameraPort] = useState(0)
-  const [cameraError, setCameraError] = useState<string | null>(null)
-  const [previewError, setPreviewError] = useState<string | null>(null)
-  const [frameSrc, setFrameSrc] = useState<string | null>(null)
-  const [, setErrorCount] = useState(0)
-  const [virtualCameraActive, setVirtualCameraActive] = useState(false)
-  const [virtualCameraError, setVirtualCameraError] = useState<string | null>(null)
 
   const [micStreaming, setMicStreaming] = useState(false)
   const [_virtualMicActive, setVirtualMicActive] = useState(false)
@@ -52,6 +41,10 @@ function DeviceRoute() {
   const [micVolume, setMicVolume] = useState(1.0)
 
   useEffect(() => {
+    invoke('request_camera_config', { deviceId: id }).catch(() => {})
+    invoke<boolean>('get_camera_stream_state').then((active) => setCameraStreaming(active)).catch(() => {})
+    invoke<boolean>('get_mic_stream_state').then((active) => setMicStreaming(active)).catch(() => {})
+
     const unlistenStart = listen<string>('file-transfer-started', (event) => {
       if (event.payload === id) {
         setTransferring(true)
@@ -64,45 +57,10 @@ function DeviceRoute() {
     })
     
     // Listen for camera stream changes
-    const unlistenCamera = listen<{ streaming: boolean; ip?: string; port?: number; use_adb?: boolean }>(
+    const unlistenCamera = listen<{ streaming: boolean }>(
       'camera-stream-state-changed',
       (event) => {
-        const payload = event.payload
-        setCameraStreaming(payload.streaming)
-        if (payload.streaming && payload.ip && payload.port) {
-          const useAdb = payload.use_adb ?? false
-          setCameraIp(useAdb ? '127.0.0.1' : payload.ip)
-          setCameraPort(useAdb ? 40000 : payload.port)
-          setCameraError(null)
-          setPreviewError(null)
-          setFrameSrc(null)
-          setErrorCount(0)
-          invoke('start_virtual_camera', { ip: payload.ip, port: payload.port, useAdb })
-            .catch((e) => {
-              console.error('Failed to start virtual camera loop:', e)
-              setCameraError(typeof e === 'string' ? e : JSON.stringify(e))
-            })
-        } else {
-          setCameraIp('')
-          setCameraPort(0)
-          setCameraError(null)
-          setPreviewError(null)
-          setFrameSrc(null)
-          setErrorCount(0)
-          invoke('stop_virtual_camera').catch((e) => {
-            console.error('Failed to stop virtual camera loop:', e)
-          })
-        }
-      }
-    )
-
-    // Listen for virtual camera state changes
-    const unlistenVirtualCamera = listen<{ active: boolean; error: string | null }>(
-      'virtual-camera-state-changed',
-      (event) => {
-        const { active, error } = event.payload
-        setVirtualCameraActive(active)
-        setVirtualCameraError(error)
+        setCameraStreaming(event.payload.streaming)
       }
     )
 
@@ -111,18 +69,6 @@ function DeviceRoute() {
       (event) => {
         const payload = event.payload
         setMicStreaming(payload.streaming)
-        if (payload.streaming && payload.ip && payload.port) {
-          const useAdb = payload.use_adb ?? false
-          invoke('start_virtual_mic', {
-            ip: payload.ip,
-            port: payload.port,
-            sampleRate: payload.sample_rate || 44100,
-            channels: payload.channels || 1,
-            useAdb,
-          }).catch((e) => console.error('Failed to start virtual mic:', e))
-        } else {
-          invoke('stop_virtual_mic').catch((e) => console.error('Failed to stop virtual mic:', e))
-        }
       }
     )
 
@@ -142,7 +88,6 @@ function DeviceRoute() {
       unlistenStart.then((fn) => fn()).catch(() => {})
       unlistenFinish.then((fn) => fn()).catch(() => {})
       unlistenCamera.then((fn) => fn()).catch(() => {})
-      unlistenVirtualCamera.then((fn) => fn()).catch(() => {})
       unlistenMic.then((fn) => fn()).catch(() => {})
       unlistenVirtualMic.then((fn) => fn()).catch(() => {})
       unlistenAudioLevel.then((fn) => fn()).catch(() => {})
@@ -158,9 +103,15 @@ function DeviceRoute() {
         setMissingDependency(missing)
         return
       }
+    } else {
+      setMicStreaming(false)
+      setMicAudioLevel(0)
     }
     await invoke('toggle_mic_stream', { deviceId: id, start: next }).catch((e) => {
       console.error('Failed to toggle mic stream:', e)
+      if (next) {
+        setMicStreaming(false)
+      }
     })
   }
 
@@ -177,34 +128,22 @@ function DeviceRoute() {
 
   const toggleCameraStream = async () => {
     const nextState = !cameraStreaming
-    setCameraError(null)
-    setPreviewError(null)
-    setFrameSrc(null)
-    setErrorCount(0)
-    setVirtualCameraActive(false)
-    setVirtualCameraError(null)
     if (nextState) {
       const missing = await invoke<MissingDependency | null>('check_system_deps', { feature: 'camera' }).catch(() => null)
       if (missing) {
         setMissingDependency(missing)
         return
       }
+    } else {
+      setCameraStreaming(false)
     }
     await invoke('toggle_camera_stream', { deviceId: id, start: nextState }).catch((e) => {
       console.error('Failed to toggle camera stream:', e)
+      if (nextState) {
+        setCameraStreaming(false)
+      }
     })
   }
-
-  useEffect(() => {
-    if (!cameraStreaming || !cameraIp || !cameraPort) {
-      setFrameSrc(null)
-      return
-    }
-
-    // Use native MJPEG stream for both ADB and Wi-Fi.
-    // The browser natively handles multipart/x-mixed-replace.
-    setFrameSrc(`http://${cameraIp}:${cameraPort}/?t=${Date.now()}`)
-  }, [cameraStreaming, cameraIp, cameraPort])
 
 
 
@@ -344,304 +283,124 @@ function DeviceRoute() {
                   title="Listen Through Mobile"
                   description="Stream your PC's system audio to this device so you can listen through its speaker or headphones."
                   control={<Toggle enabled={peer.audio_streaming_enabled} onToggle={toggleAudioStreaming} id="toggle-audio" />}
-                />
-                <SettingRow
-                  title="Phone Camera Stream"
-                  description="Use your phone camera as a virtual webcam on your PC."
-                  control={<Toggle enabled={cameraStreaming} onToggle={toggleCameraStream} id="toggle-camera" />}
                   isLast={true}
                 />
               </div>
             </section>
 
-            {/* Camera Preview Section */}
-            {cameraStreaming && cameraIp && cameraPort && (
-              <section>
-                <SectionHeader
-                  title="Camera Stream Preview"
-                  description={`Live view from ${peer.name}. Exposing as system video device.`}
-                />
-                <div style={{
-                  background: 'var(--bg-surface)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 'var(--radius-lg)',
-                  overflow: 'hidden',
-                  position: 'relative',
-                  aspectRatio: '4/3',
-                  boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
-                  marginBottom: '16px'
-                }}>
-                  {cameraError || previewError ? (
+            {/* System Virtual Camera */}
+            <section>
+              <SectionHeader
+                title="Virtual Camera"
+                description="Use your phone as a high-definition virtual webcam in Google Meet, Zoom, Teams, and OBS."
+              />
+              <div style={{
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-lg)',
+                padding: '20px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '14px',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.06)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <div style={{
-                      position: 'absolute',
-                      inset: 0,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      padding: '24px',
-                      background: 'rgba(20, 20, 22, 0.9)',
-                      color: 'var(--text-primary)',
-                      textAlign: 'center'
-                    }}>
-                      <div style={{ color: 'var(--danger)', fontSize: '15px', fontWeight: 600, marginBottom: '8px' }}>
-                        Stream Connection Error
-                      </div>
-                      <div style={{ fontSize: '13px', color: 'var(--text-secondary)', maxWidth: '80%' }}>
-                        {cameraError || previewError}
-                      </div>
-                    </div>
-                  ) : frameSrc ? (
-                    <img
-                      src={frameSrc}
-                      alt="Camera stream"
-                      onError={() => {
-                        setErrorCount(c => {
-                          const nextCount = c + 1;
-                          if (nextCount < 15) {
-                            // Retry by appending a new timestamp to force a reload
-                            setTimeout(() => {
-                              if (cameraStreaming) {
-                                setFrameSrc(`http://${cameraIp}:${cameraPort}/?t=${Date.now()}`);
-                              }
-                            }, 500);
-                          } else {
-                            setPreviewError("The image preview failed to load. The loopback address may be blocked or unreachable.");
-                          }
-                          return nextCount;
-                        });
-                      }}
-                      onLoad={() => setErrorCount(0)}
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'cover'
-                      }}
-                    />
-                  ) : (
-                    <div style={{
-                      position: 'absolute',
-                      inset: 0,
+                      width: 40,
+                      height: 40,
+                      borderRadius: 'var(--radius-md)',
+                      background: cameraStreaming ? 'rgba(59, 130, 246, 0.15)' : 'var(--bg-elevated)',
+                      color: cameraStreaming ? 'var(--accent)' : 'var(--text-tertiary)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      background: 'rgba(20, 20, 22, 0.5)'
+                      transition: 'all 0.2s ease'
                     }}>
-                      <div className="progress-spinner" style={{ width: 24, height: 24 }} />
+                      {cameraStreaming ? <Video width={20} height={20} /> : <Camera width={20} height={20} />}
                     </div>
-                  )}
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                          Phone Camera
+                        </span>
+                        {cameraStreaming && (
+                          <span style={{
+                            fontSize: '10px',
+                            fontWeight: 700,
+                            letterSpacing: '0.04em',
+                            padding: '1px 6px',
+                            borderRadius: '4px',
+                            background: 'rgba(16, 185, 129, 0.15)',
+                            color: '#10b981',
+                            border: '1px solid rgba(16, 185, 129, 0.3)'
+                          }}>
+                            LIVE
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '12.5px', color: 'var(--text-tertiary)' }}>
+                        {cameraStreaming
+                          ? 'Streaming active to system virtual camera device'
+                          : 'Turn on to stream high-definition video as virtual webcam'}
+                      </div>
+                    </div>
+                  </div>
+                  <Toggle enabled={cameraStreaming} onToggle={toggleCameraStream} id="toggle-camera" />
+                </div>
 
+                {cameraStreaming && (
                   <div style={{
-                    position: 'absolute',
-                    top: 12,
-                    left: 12,
-                    background: 'rgba(0, 0, 0, 0.65)',
-                    backdropFilter: 'blur(8px)',
-                    WebkitBackdropFilter: 'blur(8px)',
-                    padding: '4px 10px',
-                    borderRadius: '8px',
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    color: '#fff',
+                    background: 'rgba(16, 185, 129, 0.1)',
+                    border: '1px solid rgba(16, 185, 129, 0.2)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '9px 12px',
+                    fontSize: '12.5px',
+                    color: 'var(--text-secondary)',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '6px',
-                    border: '1px solid rgba(255, 255, 255, 0.1)'
+                    gap: '10px'
                   }}>
-                    <span style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: '50%',
-                      background: '#10b981',
-                      display: 'inline-block'
-                    }} />
-                    LIVE ({cameraIp}:{cameraPort})
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', flexShrink: 0 }} />
+                    <span>Appears in Zoom, Google Meet, Teams as <strong style={{ color: '#10b981' }}>Sync Camera</strong></span>
                   </div>
-                </div>
+                )}
 
-                {/* Virtual Camera Status & Troubleshooting */}
                 <div style={{
-                  background: 'var(--bg-surface)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 'var(--radius-lg)',
-                  padding: '16px 20px',
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '12px'
+                  paddingTop: '6px',
+                  borderTop: '1px solid var(--border)'
                 }}>
-                  {virtualCameraActive ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <div style={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: '50%',
-                        background: 'rgba(16, 185, 129, 0.15)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: '#10b981',
-                        flexShrink: 0
-                      }}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="20 6 9 17 4 12"></polyline>
-                        </svg>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                          System Virtual Camera Active
-                        </div>
-                        <div style={{ fontSize: '12.5px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
-                          {isWindows ? (
-                            <>
-                              Available in Zoom, Meet, and other platforms as <code style={{ background: 'var(--bg-elevated)', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', color: 'var(--accent)' }}>Sync Camera</code>.
-                            </>
-                          ) : (
-                            <>
-                              Available in Zoom, Meet, and other platforms as <code style={{ background: 'var(--bg-elevated)', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', color: 'var(--accent)' }}>Sync Camera</code> (/dev/video9).
-                            </>
-                          )}
-                        </div>
-                      </div>
+                  <button
+                    onClick={() => navigate({ to: '/device/$id/camera', params: { id } })}
+                    className="btn btn-ghost"
+                    style={{
+                      width: '100%',
+                      padding: '10px 14px',
+                      borderRadius: 'var(--radius-md)',
+                      background: 'var(--bg-elevated)',
+                      border: '1px solid var(--border)',
+                      color: 'var(--text-primary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)' }}>
+                      <Sliders size={15} color="var(--accent)" />
+                      <span style={{ color: 'var(--text-primary)', fontWeight: 550 }}>Camera Options & Preview</span>
                     </div>
-                  ) : virtualCameraError ? (
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'start', gap: '12px', marginBottom: '12px' }}>
-                        <div style={{
-                          width: 28,
-                          height: 28,
-                          borderRadius: '50%',
-                          background: 'rgba(239, 68, 68, 0.15)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: 'var(--danger)',
-                          flexShrink: 0,
-                          marginTop: '2px'
-                        }}>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="18" y1="6" x2="6" y2="18"></line>
-                            <line x1="6" y1="6" x2="18" y2="18"></line>
-                          </svg>
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                            Virtual Camera Driver Error
-                          </div>
-                          <div style={{ fontSize: '12.5px', color: 'var(--danger)', marginTop: '2px', wordBreak: 'break-word' }}>
-                            {virtualCameraError}
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {isWindows ? (
-                        <div style={{
-                          background: 'var(--bg-elevated)',
-                          border: '1px solid var(--border)',
-                          borderRadius: 'var(--radius-md)',
-                          padding: '12px 16px',
-                          fontSize: '12.5px'
-                        }}>
-                          <div style={{ fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                            To make this camera available in Zoom, Meet, and other apps:
-                          </div>
-                          <ol style={{ paddingLeft: '20px', margin: '0 0 12px 0', color: 'var(--text-tertiary)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            <li>Ensure that you approve the <strong>Administrator / UAC</strong> prompt when enabling the camera stream so the driver can register.</li>
-                            <li>If the driver fails to load, try turning the camera stream switch <strong>Off</strong> and <strong>On</strong> again to retry registration.</li>
-                            <li>Restart your video conferencing application (or your computer) to refresh the available camera list.</li>
-                            <li>Select <strong>Sync Camera</strong> as the video source in your application.</li>
-                          </ol>
-                          <div style={{ color: 'var(--text-tertiary)', fontSize: '11.5px', fontStyle: 'italic' }}>
-                            Note: The driver is registered locally as a secure DirectShow filter named "Sync Camera".
-                          </div>
-                        </div>
-                      ) : isMac ? (
-                        <div style={{
-                          background: 'var(--bg-elevated)',
-                          border: '1px solid var(--border)',
-                          borderRadius: 'var(--radius-md)',
-                          padding: '12px 16px',
-                          fontSize: '12.5px'
-                        }}>
-                          <div style={{ fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                            macOS Compatibility:
-                          </div>
-                          <div style={{ color: 'var(--text-tertiary)' }}>
-                            The system virtual camera driver is currently not supported on macOS.
-                          </div>
-                        </div>
-                      ) : (
-                        <div style={{
-                          background: 'var(--bg-elevated)',
-                          border: '1px solid var(--border)',
-                          borderRadius: 'var(--radius-md)',
-                          padding: '12px 16px',
-                          fontSize: '12.5px'
-                        }}>
-                          <div style={{ fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                            To make this camera available in Zoom and other apps:
-                          </div>
-                          <ol style={{ paddingLeft: '20px', margin: '0 0 12px 0', color: 'var(--text-tertiary)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            <li>Make sure `v4l2loopback` is installed: <code style={{ color: 'var(--text-primary)' }}>sudo apt install v4l2loopback-dkms v4l2loopback-utils</code></li>
-                            <li>Run this command in your terminal to load the driver:
-                              <div style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                background: 'var(--bg-base)',
-                                padding: '6px 10px',
-                                borderRadius: '4px',
-                                marginTop: '4px',
-                                fontFamily: 'monospace',
-                                fontSize: '11px',
-                                color: 'var(--accent)',
-                                border: '1px solid var(--border)',
-                                overflowX: 'auto',
-                                whiteSpace: 'pre'
-                              }}>
-                                sudo modprobe v4l2loopback exclusive_caps=1 card_label="Sync Camera" video_nr=9
-                              </div>
-                            </li>
-                            <li>If you see a permission error, ensure you have write access:
-                              <div style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                background: 'var(--bg-base)',
-                                padding: '6px 10px',
-                                borderRadius: '4px',
-                                marginTop: '4px',
-                                fontFamily: 'monospace',
-                                fontSize: '11px',
-                                color: 'var(--accent)',
-                                border: '1px solid var(--border)',
-                                overflowX: 'auto',
-                                whiteSpace: 'pre'
-                              }}>
-                                sudo chmod 0666 /dev/video9
-                              </div>
-                            </li>
-                          </ol>
-                          <div style={{ color: 'var(--text-tertiary)', fontSize: '11.5px', fontStyle: 'italic' }}>
-                            Note: Once you run these commands, turn this stream Off and back On.
-                          </div>
-                        </div>
-                      )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--text-tertiary)', fontSize: '12px' }}>
+                      <span>Configure</span>
+                      <ChevronRight size={14} />
                     </div>
-                  ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <div style={{ width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <div className="progress-spinner" style={{ width: 14, height: 14 }} />
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                          Starting virtual camera driver...
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  </button>
                 </div>
-              </section>
-            )}
-
+              </div>
+            </section>
 
             {/* System Virtual Microphone */}
             <section>
@@ -802,6 +561,16 @@ function DeviceRoute() {
         <DependencyModal
           dependency={missingDependency}
           onClose={() => setMissingDependency(null)}
+          onSuccess={() => {
+            if (missingDependency.feature === 'mic') {
+              invoke('toggle_mic_stream', { deviceId: id, start: true }).catch((e) => console.error(e))
+            } else if (missingDependency.feature === 'camera') {
+              invoke('toggle_camera_stream', { deviceId: id, start: true }).catch((e) => console.error(e))
+            }
+          }}
+          onStreamDirect={() => {
+            invoke('toggle_mic_stream', { deviceId: id, start: true }).catch((e) => console.error(e))
+          }}
         />
       )}
     </div>

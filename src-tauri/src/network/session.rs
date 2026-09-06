@@ -26,6 +26,9 @@ pub struct SessionContext {
     pub active_connections: Arc<Mutex<std::collections::HashSet<String>>>,
     pub active_streams: Arc<Mutex<std::collections::HashMap<String, TcpStream>>>,
     pub last_clipboard: Arc<Mutex<String>>,
+    /// Shared with the clipboard polling thread — acquire before any clipboard write
+    /// so we never collide with the watcher's OpenClipboard call (OSError 1418).
+    pub clipboard_lock: Arc<Mutex<()>>,
 }
 
 struct ActiveConnectionGuard {
@@ -271,6 +274,14 @@ fn keep_session_open(
     // Send initial TerminalServerInfo
     {
         let msg = get_terminal_info(&ctx.app, &peer_device_id);
+        if let Ok(mut w) = writer_clone.lock() {
+            let _ = write_line_json(&mut *w, &msg);
+        }
+    }
+
+    // Request initial Camera configuration from peer
+    {
+        let msg = ServerMessage::RequestCameraConfig;
         if let Ok(mut w) = writer_clone.lock() {
             let _ = write_line_json(&mut *w, &msg);
         }
@@ -546,15 +557,30 @@ fn keep_session_open(
                         base64_data.len()
                     );
                     if let Ok(bytes) = STANDARD.decode(&base64_data) {
-                        use clipboard_rs::common::RustImage;
-                        if let Ok(image_data) = clipboard_rs::RustImageData::from_bytes(&bytes) {
-                            if let Ok(clipboard_ctx) = clipboard_rs::ClipboardContext::new() {
-                                use clipboard_rs::Clipboard;
-                                let _ = clipboard_ctx.set_image(image_data);
-                                println!("[tcp] Successfully set image to desktop clipboard");
+                        // Use the `image` crate to decode PNG → RGBA pixels, then write
+                        // via arboard (tauri-plugin-clipboard-manager) which is far more
+                        // reliable on Windows than clipboard_rs (avoids OSError 1418 caused
+                        // by the clipboard thread not having an open handle).
+                        use image::GenericImageView;
+                        match image::load_from_memory_with_format(&bytes, image::ImageFormat::Png) {
+                            Ok(img) => {
+                                let rgba: Vec<u8> = img.pixels()
+                                    .flat_map(|(_, _, pixel)| pixel.0)
+                                    .collect();
+                                let (w, h) = img.dimensions();
+                                let tauri_image = tauri::image::Image::new_owned(rgba, w, h);
+                                // Hold clipboard_lock so the 200ms polling thread
+                                // (which uses clipboard_rs) cannot call OpenClipboard
+                                // concurrently. This prevents OSError 1418 on Windows.
+                                let _cb_lock = ctx.clipboard_lock.lock().unwrap();
+                                match ctx.app.clipboard().write_image(&tauri_image) {
+                                    Ok(_) => println!("[tcp] Successfully set image to desktop clipboard"),
+                                    Err(e) => eprintln!("[tcp] Failed to write image to clipboard: {e}"),
+                                }
                             }
-                        } else {
-                            eprintln!("[tcp] Failed to parse image data from peer clipboard message");
+                            Err(e) => {
+                                eprintln!("[tcp] Failed to decode clipboard image PNG: {e}");
+                            }
                         }
                     }
                 } else {
@@ -639,6 +665,12 @@ fn keep_session_open(
                     "port": port,
                     "use_adb": use_adb,
                 }));
+                let app_c = ctx.app.clone();
+                let ip_c = peer_ip.clone();
+                tauri::async_runtime::spawn(async move {
+                    let state = app_c.state::<AppState>();
+                    let _ = crate::commands::camera::start_virtual_camera(app_c.clone(), state, ip_c, port, use_adb).await;
+                });
             }
 
             Ok(ClientMessage::CameraStreamStopped) => {
@@ -646,10 +678,26 @@ fn keep_session_open(
                 let _ = ctx.app.emit("camera-stream-state-changed", serde_json::json!({
                     "streaming": false,
                 }));
+                let app_c = ctx.app.clone();
+                tauri::async_runtime::spawn(async move {
+                    let state = app_c.state::<AppState>();
+                    let _ = crate::commands::camera::stop_virtual_camera(state).await;
+                });
+            }
+            Ok(ClientMessage::CameraConfigState { is_front, resolution, fps, rotation, use_adb }) => {
+                println!("[tcp] Received CameraConfigState from peer: is_front={}, res={}, fps={}, rot={}, use_adb={}", is_front, resolution, fps, rotation, use_adb);
+                let _ = ctx.app.emit("camera-config-changed", serde_json::json!({
+                    "deviceId": peer_device_id,
+                    "is_front": is_front,
+                    "resolution": resolution,
+                    "fps": fps,
+                    "rotation": rotation,
+                    "use_adb": use_adb,
+                }));
             }
             Ok(ClientMessage::MicStreamStarted { port, sample_rate, channels, use_adb }) => {
-                println!("[tcp] Received MicStreamStarted from peer");
                 let peer_ip = reader.get_ref().peer_addr().map(|a| a.ip().to_string()).unwrap_or_default();
+                println!("[tcp] Received MicStreamStarted from peer: {}:{}", peer_ip, port);
                 let _ = ctx.app.emit("mic-stream-state-changed", serde_json::json!({
                     "streaming": true,
                     "ip": peer_ip,
@@ -658,12 +706,24 @@ fn keep_session_open(
                     "channels": channels,
                     "use_adb": use_adb,
                 }));
+                let app_c = ctx.app.clone();
+                let ip_c = peer_ip.clone();
+                tauri::async_runtime::spawn(async move {
+                    let state = app_c.state::<AppState>();
+                    let _ = crate::commands::mic::start_virtual_mic(app_c.clone(), state, ip_c, port, sample_rate, channels, use_adb).await;
+                });
             }
             Ok(ClientMessage::MicStreamStopped) => {
                 println!("[tcp] Received MicStreamStopped from peer");
                 let _ = ctx.app.emit("mic-stream-state-changed", serde_json::json!({
                     "streaming": false,
                 }));
+                let _ = ctx.app.emit("mic-audio-level", 0.0);
+                let app_c = ctx.app.clone();
+                tauri::async_runtime::spawn(async move {
+                    let state = app_c.state::<AppState>();
+                    let _ = crate::commands::mic::stop_virtual_mic(state).await;
+                });
             }
             Ok(ClientMessage::AudioStreamRequest { start }) => {
                 let peer_name = {
@@ -735,6 +795,18 @@ fn keep_session_open(
     let _ = ctx.app.emit("camera-stream-state-changed", serde_json::json!({
         "streaming": false,
     }));
+    let _ = ctx.app.emit("mic-stream-state-changed", serde_json::json!({
+        "streaming": false,
+    }));
+    let _ = ctx.app.emit("mic-audio-level", 0.0);
+    {
+        let app_c = ctx.app.clone();
+        tauri::async_runtime::spawn(async move {
+            let state = app_c.state::<AppState>();
+            let _ = crate::commands::camera::stop_virtual_camera(state.clone()).await;
+            let _ = crate::commands::mic::stop_virtual_mic(state.clone()).await;
+        });
+    }
     media_running.store(false, std::sync::atomic::Ordering::Relaxed);
     ctx.app.unlisten(event_id);
     ctx.app.unlisten(term_event_id);

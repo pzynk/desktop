@@ -1,4 +1,4 @@
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 use crate::app::AppState;
 
 fn create_command(program: &str) -> std::process::Command {
@@ -52,11 +52,28 @@ fn find_adb_path() -> String {
 }
 
 #[tauri::command]
+pub async fn get_mic_stream_state(
+    state: State<'_, AppState>,
+) -> Result<bool, String> {
+    let running_guard = state.virtual_mic_running.lock().unwrap();
+    Ok(running_guard.is_some())
+}
+
+#[tauri::command]
 pub async fn toggle_mic_stream(
+    app: AppHandle,
     state: State<'_, AppState>,
     device_id: String,
     start: bool,
 ) -> Result<(), String> {
+    if !start {
+        let _ = stop_virtual_mic(state.clone()).await;
+        let _ = app.emit("mic-stream-state-changed", serde_json::json!({
+            "streaming": false,
+        }));
+        let _ = app.emit("mic-audio-level", 0.0);
+    }
+
     let mut active_streams = state.active_streams.lock().unwrap();
     if let Some(stream) = active_streams.get_mut(&device_id) {
         let message = if start {
@@ -64,7 +81,9 @@ pub async fn toggle_mic_stream(
         } else {
             crate::network::protocol::ServerMessage::StopMicStream
         };
-        crate::network::protocol::write_line_json(stream, &message)?;
+        let _ = crate::network::protocol::write_line_json(stream, &message);
+        Ok(())
+    } else if !start {
         Ok(())
     } else {
         Err("Device is not connected".into())
@@ -89,14 +108,14 @@ pub async fn start_virtual_mic(
     if use_adb {
         let adb_cmd = find_adb_path();
         let _ = create_command(&adb_cmd)
-            .args(&["forward", "tcp:40001", &format!("tcp:{}", port)])
+            .args(&["forward", "tcp:40002", &format!("tcp:{}", port)])
             .output();
     }
 
     let mic = crate::system::virtual_mic::VirtualMicrophone::create(
         app,
         ip,
-        if use_adb { 40001 } else { port },
+        if use_adb { 40002 } else { port },
         sample_rate,
         channels,
         use_adb,
@@ -112,6 +131,10 @@ pub async fn stop_virtual_mic(
 ) -> Result<(), String> {
     let mut running_guard = state.virtual_mic_running.lock().unwrap();
     *running_guard = None;
+    let adb_cmd = find_adb_path();
+    let _ = create_command(&adb_cmd)
+        .args(&["forward", "--remove", "tcp:40002"])
+        .output();
     crate::system::virtual_mic::cleanup_pulse_modules();
     Ok(())
 }

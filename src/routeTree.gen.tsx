@@ -13,6 +13,7 @@ import { Route as TransferRouteImport } from './routes/transfer'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DeviceIdRouteImport } from './routes/device.$id'
+import { Route as DeviceIdCameraRouteImport } from './routes/device.$id_.camera'
 
 const TransferRoute = TransferRouteImport.update({
   id: '/transfer',
@@ -34,18 +35,25 @@ const DeviceIdRoute = DeviceIdRouteImport.update({
   path: '/device/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DeviceIdCameraRoute = DeviceIdCameraRouteImport.update({
+  id: '/device/$id_/camera',
+  path: '/device/$id/camera',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
   '/transfer': typeof TransferRoute
   '/device/$id': typeof DeviceIdRoute
+  '/device/$id/camera': typeof DeviceIdCameraRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
   '/transfer': typeof TransferRoute
   '/device/$id': typeof DeviceIdRoute
+  '/device/$id/camera': typeof DeviceIdCameraRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -53,13 +61,25 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/transfer': typeof TransferRoute
   '/device/$id': typeof DeviceIdRoute
+  '/device/$id_/camera': typeof DeviceIdCameraRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/settings' | '/transfer' | '/device/$id'
+  fullPaths:
+    | '/'
+    | '/settings'
+    | '/transfer'
+    | '/device/$id'
+    | '/device/$id/camera'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/settings' | '/transfer' | '/device/$id'
-  id: '__root__' | '/' | '/settings' | '/transfer' | '/device/$id'
+  to: '/' | '/settings' | '/transfer' | '/device/$id' | '/device/$id/camera'
+  id:
+    | '__root__'
+    | '/'
+    | '/settings'
+    | '/transfer'
+    | '/device/$id'
+    | '/device/$id_/camera'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -67,6 +87,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   TransferRoute: typeof TransferRoute
   DeviceIdRoute: typeof DeviceIdRoute
+  DeviceIdCameraRoute: typeof DeviceIdCameraRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -99,6 +120,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DeviceIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/device/$id_/camera': {
+      id: '/device/$id_/camera'
+      path: '/device/$id/camera'
+      fullPath: '/device/$id/camera'
+      preLoaderRoute: typeof DeviceIdCameraRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -107,6 +135,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   TransferRoute: TransferRoute,
   DeviceIdRoute: DeviceIdRoute,
+  DeviceIdCameraRoute: DeviceIdCameraRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

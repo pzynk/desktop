@@ -179,7 +179,7 @@ fn play_mic_audio_windows(
     app: AppHandle,
     connect_addr: String,
     sample_rate: u32,
-    channels: u16,
+    _channels: u16,
     running: Arc<AtomicBool>,
     muted: Arc<AtomicBool>,
     volume: Arc<Mutex<f64>>,
@@ -215,13 +215,24 @@ fn play_mic_audio_windows(
         }
     };
 
-    let (sample_tx, sample_rx) = std::sync::mpsc::sync_channel::<f32>(sample_rate as usize * channels as usize * 2);
-
-    let config = cpal::StreamConfig {
-        channels,
-        sample_rate: cpal::SampleRate(sample_rate),
-        buffer_size: cpal::BufferSize::Default,
+    let supported_config = match device.default_output_config() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("[virtual_mic] Failed to get default output config: {e}");
+            app.emit(
+                "virtual-mic-state-changed",
+                serde_json::json!({ "active": false, "error": format!("Failed to get device config: {e}") }),
+            )
+            .ok();
+            return;
+        }
     };
+
+    let out_channels = supported_config.channels();
+    let out_sample_rate = supported_config.sample_rate().0;
+    let config: cpal::StreamConfig = supported_config.into();
+
+    let (sample_tx, sample_rx) = std::sync::mpsc::sync_channel::<f32>((out_sample_rate as usize * out_channels as usize).max(8192));
 
     let stream = device.build_output_stream(
         &config,
@@ -279,6 +290,10 @@ fn play_mic_audio_windows(
     let mut sample_count = 0u32;
     let mut sum_sq = 0.0f64;
 
+    let mut last_sample = 0.0f32;
+    let mut phase = 0.0f64;
+    let step = sample_rate as f64 / out_sample_rate as f64;
+
     while running.load(Ordering::Relaxed) {
         match tcp_stream.read(&mut buf) {
             Ok(0) => break,
@@ -295,8 +310,18 @@ fn play_mic_audio_windows(
                     };
 
                     let clamped = sample_val.clamp(-32768.0, 32767.0);
-                    let normalized = (clamped / 32768.0) as f32;
-                    let _ = sample_tx.try_send(normalized);
+                    let curr_normalized = (clamped / 32768.0) as f32;
+
+                    // Dynamically resample and map channels to output device
+                    while phase < 1.0 {
+                        let interpolated = last_sample + (curr_normalized - last_sample) * (phase as f32);
+                        for _ in 0..out_channels {
+                            let _ = sample_tx.try_send(interpolated);
+                        }
+                        phase += step;
+                    }
+                    phase -= 1.0;
+                    last_sample = curr_normalized;
 
                     sum_sq += clamped * clamped;
                     sample_count += 1;

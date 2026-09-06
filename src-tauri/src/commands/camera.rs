@@ -3,11 +3,27 @@ use tauri::{Emitter, Manager, State};
 use crate::app::AppState;
 
 #[tauri::command]
+pub async fn get_camera_stream_state(
+    state: State<'_, AppState>,
+) -> Result<bool, String> {
+    let running_guard = state.virtual_camera_running.lock().unwrap();
+    Ok(running_guard.is_some())
+}
+
+#[tauri::command]
 pub async fn toggle_camera_stream(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     device_id: String,
     start: bool,
 ) -> Result<(), String> {
+    if !start {
+        let _ = stop_virtual_camera(state.clone()).await;
+        let _ = app.emit("camera-stream-state-changed", serde_json::json!({
+            "streaming": false,
+        }));
+    }
+
     let mut active_streams = state.active_streams.lock().unwrap();
     if let Some(stream) = active_streams.get_mut(&device_id) {
         let message = if start {
@@ -15,6 +31,49 @@ pub async fn toggle_camera_stream(
         } else {
             crate::network::protocol::ServerMessage::StopCameraStream
         };
+        let _ = crate::network::protocol::write_line_json(stream, &message);
+        Ok(())
+    } else if !start {
+        Ok(())
+    } else {
+        Err("Device is not connected".into())
+    }
+}
+
+#[tauri::command]
+pub async fn update_camera_config(
+    state: State<'_, AppState>,
+    device_id: String,
+    is_front: Option<bool>,
+    resolution: Option<String>,
+    fps: Option<i32>,
+    rotation: Option<i32>,
+    use_adb: Option<bool>,
+) -> Result<(), String> {
+    let mut active_streams = state.active_streams.lock().unwrap();
+    if let Some(stream) = active_streams.get_mut(&device_id) {
+        let message = crate::network::protocol::ServerMessage::UpdateCameraConfig {
+            is_front,
+            resolution,
+            fps,
+            rotation,
+            use_adb,
+        };
+        crate::network::protocol::write_line_json(stream, &message)?;
+        Ok(())
+    } else {
+        Err("Device is not connected".into())
+    }
+}
+
+#[tauri::command]
+pub async fn request_camera_config(
+    state: State<'_, AppState>,
+    device_id: String,
+) -> Result<(), String> {
+    let mut active_streams = state.active_streams.lock().unwrap();
+    if let Some(stream) = active_streams.get_mut(&device_id) {
+        let message = crate::network::protocol::ServerMessage::RequestCameraConfig;
         crate::network::protocol::write_line_json(stream, &message)?;
         Ok(())
     } else {
@@ -113,6 +172,34 @@ pub async fn start_virtual_camera(
     let (cancel_tx, mut cancel_rx) = tokio::sync::oneshot::channel::<()>();
     *running_guard = Some(cancel_tx);
 
+    let (preview_tx, _) = tokio::sync::broadcast::channel::<Vec<u8>>(2);
+    let preview_tx_server = preview_tx.clone();
+
+    // Start local preview relay server on 127.0.0.1:40001
+    tokio::spawn(async move {
+        if let Ok(listener) = tokio::net::TcpListener::bind("127.0.0.1:40001").await {
+            while let Ok((mut socket, _)) = listener.accept().await {
+                let mut rx = preview_tx_server.subscribe();
+                tokio::spawn(async move {
+                    use tokio::io::AsyncWriteExt;
+                    let header = "HTTP/1.1 200 OK\r\nContent-Type: multipart/x-mixed-replace; boundary=frame\r\nCache-Control: no-cache, no-store\r\nConnection: close\r\n\r\n";
+                    if socket.write_all(header.as_bytes()).await.is_err() {
+                        return;
+                    }
+                    let boundary_prefix = b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ";
+                    let crlf2 = b"\r\n\r\n";
+                    while let Ok(jpeg) = rx.recv().await {
+                        if socket.write_all(boundary_prefix).await.is_err() { break; }
+                        if socket.write_all(jpeg.len().to_string().as_bytes()).await.is_err() { break; }
+                        if socket.write_all(crlf2).await.is_err() { break; }
+                        if socket.write_all(&jpeg).await.is_err() { break; }
+                        if socket.write_all(b"\r\n").await.is_err() { break; }
+                    }
+                });
+            }
+        }
+    });
+
     let virtual_camera_running = state.virtual_camera_running.clone();
     let app_handle = app.clone();
     let latest_frame = state.latest_camera_frame.clone();
@@ -200,15 +287,9 @@ pub async fn start_virtual_camera(
 
             println!("[camera] Connecting to camera stream (attempt {}/{})...", retry_count + 1, max_retries);
             
-            match run_virtual_camera_loop(app_handle.clone(), target_ip.clone(), target_port, latest_frame.clone(), &mut cancel_rx).await {
+            match run_virtual_camera_loop(app_handle.clone(), target_ip.clone(), target_port, latest_frame.clone(), preview_tx.clone(), &mut cancel_rx).await {
                 Ok(_) => {
-                    let _ = app_handle.emit(
-                        "virtual-camera-state-changed",
-                        serde_json::json!({
-                            "active": false,
-                            "error": null,
-                        }),
-                    );
+                    println!("[camera] Virtual camera stream closed.");
                     break;
                 }
                 Err(e) => {
@@ -262,22 +343,13 @@ pub async fn start_virtual_camera(
                 .output();
         }
 
-
-        // Notify frontend that camera streaming has stopped
         let _ = app_handle.emit(
-            "camera-stream-state-changed",
+            "virtual-camera-state-changed",
             serde_json::json!({
-                "streaming": false,
+                "active": false,
+                "error": null,
             }),
         );
-
-        // Send stop message to active streams to ensure Android stops streaming
-        let state = app_handle.state::<AppState>();
-        let mut active_streams = state.active_streams.lock().unwrap();
-        for stream in active_streams.values_mut() {
-            let message = crate::network::protocol::ServerMessage::StopCameraStream;
-            let _ = crate::network::protocol::write_line_json(stream, &message);
-        }
     });
 
     Ok(())
@@ -298,6 +370,7 @@ async fn run_virtual_camera_loop(
     ip: String,
     port: u16,
     latest_frame: std::sync::Arc<std::sync::Mutex<Option<Vec<u8>>>>,
+    preview_tx: tokio::sync::broadcast::Sender<Vec<u8>>,
     cancel_rx: &mut tokio::sync::oneshot::Receiver<()>,
 ) -> Result<(), String> {
     let url = format!("{}:{}", ip, port);
@@ -319,16 +392,122 @@ async fn run_virtual_camera_loop(
         .map_err(|e| format!("Failed to send HTTP GET: {e}"))?;
 
     let mut reader = tokio::io::BufReader::with_capacity(65536, stream);
-    let mut buffer = Vec::new();
+    let mut buffer = Vec::with_capacity(131072);
     let mut chunk = vec![0u8; 65536];
 
-    let mut cam_initialized = false;
-    
-    #[cfg(target_os = "linux")]
-    let mut linux_cam: Option<linux_cam::LinuxVirtualCamera> = None;
-    
-    #[cfg(target_os = "windows")]
-    let mut win_cam: Option<win_cam::WinVirtualCamera> = None;
+    let (frame_tx, mut frame_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(2);
+    let app_worker = app.clone();
+
+    // Spawn a dedicated blocking worker for fast JPEG decoding & virtual camera feeding
+    let worker_handle = tokio::task::spawn_blocking(move || {
+        let mut current_dim: Option<(u32, u32)> = None;
+        #[cfg(target_os = "linux")]
+        let mut linux_cam: Option<linux_cam::LinuxVirtualCamera> = None;
+        #[cfg(target_os = "linux")]
+        let mut yuyv_converter = FastRgbToYuyv::new(0, 0);
+
+        #[cfg(target_os = "windows")]
+        let mut win_cam: Option<win_cam::WinVirtualCamera> = None;
+        #[cfg(target_os = "windows")]
+        let mut nv12_converter = FastRgbToNv12::new(0, 0);
+
+        let mut rgb_buffer: Vec<u8> = Vec::new();
+
+        while let Some(jpeg_bytes) = frame_rx.blocking_recv() {
+            let mut decoder = zune_jpeg::JpegDecoder::new(&jpeg_bytes);
+            if decoder.decode_headers().is_err() {
+                continue;
+            }
+            let info = match decoder.info() {
+                Some(i) => i,
+                None => continue,
+            };
+            let w = info.width as usize;
+            let h = info.height as usize;
+            let req_size = decoder.output_buffer_size().unwrap_or(w * h * 3);
+            if rgb_buffer.len() < req_size {
+                rgb_buffer.resize(req_size, 0);
+            }
+            if decoder.decode_into(&mut rgb_buffer).is_err() {
+                continue;
+            }
+
+            let new_dim = (w as u32, h as u32);
+            if current_dim != Some(new_dim) {
+                current_dim = Some(new_dim);
+                #[cfg(target_os = "linux")]
+                {
+                    linux_cam = None;
+                    match linux_cam::LinuxVirtualCamera::create(w as u32, h as u32) {
+                        Ok(c) => {
+                            linux_cam = Some(c);
+                            let _ = app_worker.emit(
+                                "virtual-camera-state-changed",
+                                serde_json::json!({
+                                    "active": true,
+                                    "error": null,
+                                }),
+                            );
+                        }
+                        Err(e) => {
+                            eprintln!("[camera] Failed to create virtual camera: {e}");
+                            let _ = app_worker.emit(
+                                "virtual-camera-state-changed",
+                                serde_json::json!({
+                                    "active": false,
+                                    "error": format!("Failed to create virtual camera: {e}"),
+                                }),
+                            );
+                        }
+                    }
+                }
+                #[cfg(target_os = "windows")]
+                {
+                    win_cam = None;
+                    match win_cam::WinVirtualCamera::create(w as u32, h as u32) {
+                        Ok(c) => {
+                            win_cam = Some(c);
+                            let _ = app_worker.emit(
+                                "virtual-camera-state-changed",
+                                serde_json::json!({
+                                    "active": true,
+                                    "error": null,
+                                }),
+                            );
+                        }
+                        Err(e) => {
+                            eprintln!("[camera] Failed to create virtual camera: {e}");
+                            let _ = app_worker.emit(
+                                "virtual-camera-state-changed",
+                                serde_json::json!({
+                                    "active": false,
+                                    "error": format!("Failed to create virtual camera: {e}"),
+                                }),
+                            );
+                        }
+                    }
+                }
+            }
+
+            #[cfg(target_os = "linux")]
+            {
+                if let Some(ref mut c) = linux_cam {
+                    let yuyv = yuyv_converter.convert(&rgb_buffer, w, h);
+                    let _ = c.send(yuyv);
+                }
+            }
+
+            #[cfg(target_os = "windows")]
+            {
+                if let Some(ref mut c) = win_cam {
+                    let nv12 = nv12_converter.convert(&rgb_buffer, w, h);
+                    let _ = c.send(nv12);
+                }
+            }
+        }
+    });
+
+    let mut result = Ok(());
 
     loop {
         tokio::select! {
@@ -338,11 +517,18 @@ async fn run_virtual_camera_loop(
             read_res = tokio::time::timeout(std::time::Duration::from_secs(15), reader.read(&mut chunk)) => {
                 let bytes_read = match read_res {
                     Ok(Ok(n)) => n,
-                    Ok(Err(e)) => return Err(format!("Read error: {e}")),
-                    Err(_) => return Err("Read timeout: no camera data received for 15 seconds".into()),
+                    Ok(Err(e)) => {
+                        result = Err(format!("Read error: {e}"));
+                        break;
+                    }
+                    Err(_) => {
+                        result = Err("Read timeout: no camera data received for 15 seconds".into());
+                        break;
+                    }
                 };
                 if bytes_read == 0 {
-                    break; // stream closed
+                    result = Err("Camera stream ended by peer".into());
+                    break;
                 }
                 buffer.extend_from_slice(&chunk[..bytes_read]);
 
@@ -354,103 +540,21 @@ async fn run_virtual_camera_loop(
 
                     if let Some(end_idx) = find_subsequence(&buffer, &[0xFF, 0xD9]) {
                         let actual_end_idx = end_idx + 2;
-                        let jpeg_bytes = &buffer[0..actual_end_idx];
+                        let jpeg_bytes = buffer[0..actual_end_idx].to_vec();
 
                         {
                             let mut guard = latest_frame.lock().unwrap();
-                            *guard = Some(jpeg_bytes.to_vec());
+                            *guard = Some(jpeg_bytes.clone());
                         }
 
-                        let mut needs_decode = false;
-                        #[cfg(target_os = "linux")]
-                        if linux_cam.is_some() || !cam_initialized {
-                            needs_decode = true;
-                        }
-                        #[cfg(target_os = "windows")]
-                        if win_cam.is_some() || !cam_initialized {
-                            needs_decode = true;
-                        }
+                        // Send to local preview relay server
+                        let _ = preview_tx.send(jpeg_bytes.clone());
 
-                        if needs_decode {
-                            if let Ok((rgb, w, h)) = decode_jpeg(jpeg_bytes) {
-                                if !cam_initialized {
-                                    cam_initialized = true;
-                                    #[cfg(target_os = "linux")]
-                                    {
-                                        match linux_cam::LinuxVirtualCamera::create(w, h) {
-                                            Ok(c) => {
-                                                linux_cam = Some(c);
-                                                let _ = app.emit(
-                                                    "virtual-camera-state-changed",
-                                                    serde_json::json!({
-                                                        "active": true,
-                                                        "error": null,
-                                                    }),
-                                                );
-                                            }
-                                            Err(e) => {
-                                                eprintln!("[camera] Failed to create virtual camera (preview will still work): {e}");
-                                                let _ = app.emit(
-                                                    "virtual-camera-state-changed",
-                                                    serde_json::json!({
-                                                        "active": false,
-                                                        "error": format!("Failed to create virtual camera: {e}"),
-                                                    }),
-                                                );
-                                            }
-                                        }
-                                    }
-                                    #[cfg(target_os = "windows")]
-                                    {
-                                        match win_cam::WinVirtualCamera::create(w, h) {
-                                            Ok(c) => {
-                                                win_cam = Some(c);
-                                                let _ = app.emit(
-                                                    "virtual-camera-state-changed",
-                                                    serde_json::json!({
-                                                        "active": true,
-                                                        "error": null,
-                                                    }),
-                                                );
-                                            }
-                                            Err(e) => {
-                                                eprintln!("[camera] Failed to create virtual camera (preview will still work): {e}");
-                                                let _ = app.emit(
-                                                    "virtual-camera-state-changed",
-                                                    serde_json::json!({
-                                                        "active": false,
-                                                        "error": format!("Failed to create virtual camera: {e}"),
-                                                    }),
-                                                );
-                                            }
-                                        }
-                                    }
-                                }
-
-                                #[cfg(target_os = "linux")]
-                                {
-                                    if let Some(ref mut c) = linux_cam {
-                                        let mut yuyv = vec![0u8; (w * h * 2) as usize];
-                                        rgb_to_yuyv(&rgb, &mut yuyv);
-                                        let _ = c.send(&yuyv);
-                                    }
-                                }
-
-                                #[cfg(target_os = "windows")]
-                                {
-                                    if let Some(ref mut c) = win_cam {
-                                        let _ = c.send(&rgb);
-                                    }
-                                }
-                            }
-                        } else {
-                            if !cam_initialized {
-                                cam_initialized = true;
-                            }
-                        }
+                        // Try sending to the background decode/virtualcam worker
+                        // If worker is busy decoding the previous frame, drop this one to prevent TCP stall and lag
+                        let _ = frame_tx.try_send(jpeg_bytes);
 
                         buffer.drain(0..actual_end_idx);
-                        tokio::task::yield_now().await;
                     } else {
                         break;
                     }
@@ -463,56 +567,180 @@ async fn run_virtual_camera_loop(
         }
     }
 
+    // Drop sender to signal worker thread to terminate
+    drop(frame_tx);
+    let _ = worker_handle.await;
+
     {
         let mut guard = latest_frame.lock().unwrap();
         *guard = None;
     }
-    Ok(())
+    result
 }
 
 fn find_subsequence(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     haystack.windows(needle.len()).position(|window| window == needle)
 }
 
-fn decode_jpeg(jpeg_bytes: &[u8]) -> Result<(Vec<u8>, u32, u32), String> {
-    let mut decoder = jpeg_decoder::Decoder::new(std::io::Cursor::new(jpeg_bytes));
-    let pixels = decoder.decode().map_err(|e| e.to_string())?;
-    let info = decoder.info().ok_or_else(|| "Failed to get JPEG info".to_string())?;
-    Ok((pixels, info.width as u32, info.height as u32))
+pub struct FastRgbToNv12 {
+    buffer: Vec<u8>,
 }
 
-#[cfg(target_os = "linux")]
-fn rgb_to_yuyv(rgb: &[u8], yuyv: &mut [u8]) {
-    let num_pixels = rgb.len() / 3;
-    for i in (0..num_pixels).step_by(2) {
-        if i + 1 >= num_pixels {
-            break;
+impl FastRgbToNv12 {
+    pub fn new(w: usize, h: usize) -> Self {
+        let y_size = w * h;
+        let uv_size = y_size / 2;
+        Self {
+            buffer: vec![0u8; y_size + uv_size],
         }
-        let r0 = rgb[i * 3] as f32;
-        let g0 = rgb[i * 3 + 1] as f32;
-        let b0 = rgb[i * 3 + 2] as f32;
+    }
 
-        let r1 = rgb[(i + 1) * 3] as f32;
-        let g1 = rgb[(i + 1) * 3 + 1] as f32;
-        let b1 = rgb[(i + 1) * 3 + 2] as f32;
-
-        let y0 = 0.299 * r0 + 0.587 * g0 + 0.114 * b0;
-        let y1 = 0.299 * r1 + 0.587 * g1 + 0.114 * b1;
-
-        let r_avg = (r0 + r1) / 2.0;
-        let g_avg = (g0 + g1) / 2.0;
-        let b_avg = (b0 + b1) / 2.0;
-
-        let u = -0.169 * r_avg - 0.331 * g_avg + 0.500 * b_avg + 128.0;
-        let v = 0.500 * r_avg - 0.419 * g_avg - 0.081 * b_avg + 128.0;
-
-        let dest_idx = i * 2;
-        if dest_idx + 3 < yuyv.len() {
-            yuyv[dest_idx] = y0.clamp(0.0, 255.0) as u8;
-            yuyv[dest_idx + 1] = u.clamp(0.0, 255.0) as u8;
-            yuyv[dest_idx + 2] = y1.clamp(0.0, 255.0) as u8;
-            yuyv[dest_idx + 3] = v.clamp(0.0, 255.0) as u8;
+    #[inline]
+    pub fn convert(&mut self, rgb: &[u8], w: usize, h: usize) -> &[u8] {
+        let y_size = w * h;
+        let total_size = y_size + (y_size / 2);
+        if self.buffer.len() != total_size {
+            self.buffer.resize(total_size, 0);
         }
+
+        let (y_plane, uv_plane) = self.buffer.split_at_mut(y_size);
+
+        let row_pair_size = w * 2;
+        let rgb_pair_size = row_pair_size * 3;
+
+        for (pair_idx, (y_2rows, uv_row)) in y_plane.chunks_exact_mut(row_pair_size).zip(uv_plane.chunks_exact_mut(w)).enumerate() {
+            let rgb_offset = pair_idx * rgb_pair_size;
+            if rgb_offset + rgb_pair_size > rgb.len() {
+                break;
+            }
+
+            let (y_row0, y_row1) = y_2rows.split_at_mut(w);
+            let rgb0 = &rgb[rgb_offset..rgb_offset + w * 3];
+            let rgb1 = &rgb[rgb_offset + w * 3..rgb_offset + rgb_pair_size];
+
+            for x in (0..w).step_by(2) {
+                let x3_0 = x * 3;
+                let x3_1 = x3_0 + 3;
+
+                let r00 = rgb0[x3_0] as i32;
+                let g00 = rgb0[x3_0 + 1] as i32;
+                let b00 = rgb0[x3_0 + 2] as i32;
+
+                let r01 = rgb0[x3_1] as i32;
+                let g01 = rgb0[x3_1 + 1] as i32;
+                let b01 = rgb0[x3_1 + 2] as i32;
+
+                let r10 = rgb1[x3_0] as i32;
+                let g10 = rgb1[x3_0 + 1] as i32;
+                let b10 = rgb1[x3_0 + 2] as i32;
+
+                let r11 = rgb1[x3_1] as i32;
+                let g11 = rgb1[x3_1 + 1] as i32;
+                let b11 = rgb1[x3_1 + 2] as i32;
+
+                // Standard Rec.601 limited video range
+                let y00 = ((66 * r00 + 129 * g00 + 25 * b00 + 128) >> 8) + 16;
+                let y01 = ((66 * r01 + 129 * g01 + 25 * b01 + 128) >> 8) + 16;
+                let y10 = ((66 * r10 + 129 * g10 + 25 * b10 + 128) >> 8) + 16;
+                let y11 = ((66 * r11 + 129 * g11 + 25 * b11 + 128) >> 8) + 16;
+
+                y_row0[x] = y00.clamp(0, 255) as u8;
+                y_row0[x + 1] = y01.clamp(0, 255) as u8;
+                y_row1[x] = y10.clamp(0, 255) as u8;
+                y_row1[x + 1] = y11.clamp(0, 255) as u8;
+
+                // Average 2x2 chroma subsampling
+                let r_avg = (r00 + r01 + r10 + r11 + 2) >> 2;
+                let g_avg = (g00 + g01 + g10 + g11 + 2) >> 2;
+                let b_avg = (b00 + b01 + b10 + b11 + 2) >> 2;
+
+                let u = ((-38 * r_avg - 74 * g_avg + 112 * b_avg + 128) >> 8) + 128;
+                let v = ((112 * r_avg - 94 * g_avg - 18 * b_avg + 128) >> 8) + 128;
+
+                uv_row[x] = u.clamp(0, 255) as u8;
+                uv_row[x + 1] = v.clamp(0, 255) as u8;
+            }
+        }
+        &self.buffer
+    }
+}
+
+
+#[allow(dead_code)]
+pub struct FastRgbToYuyv {
+    buffer: Vec<u8>,
+}
+
+#[allow(dead_code)]
+impl FastRgbToYuyv {
+    pub fn new(w: usize, h: usize) -> Self {
+        Self {
+            buffer: vec![0u8; w * h * 2],
+        }
+    }
+
+    #[inline]
+    pub fn convert(&mut self, rgb: &[u8], w: usize, h: usize) -> &[u8] {
+        let expected_len = w * h * 2;
+        if self.buffer.len() != expected_len {
+            self.buffer.resize(expected_len, 0);
+        }
+        let yuyv = &mut self.buffer;
+
+        for chunk_idx in 0..(w * h / 2) {
+            let rgb_idx1 = chunk_idx * 6;
+            let rgb_idx2 = rgb_idx1 + 3;
+            let yuyv_idx = chunk_idx * 4;
+
+            let r1 = rgb[rgb_idx1] as i32;
+            let g1 = rgb[rgb_idx1 + 1] as i32;
+            let b1 = rgb[rgb_idx1 + 2] as i32;
+
+            let r2 = rgb[rgb_idx2] as i32;
+            let g2 = rgb[rgb_idx2 + 1] as i32;
+            let b2 = rgb[rgb_idx2 + 2] as i32;
+
+            let y0 = ((66 * r1 + 129 * g1 + 25 * b1 + 128) >> 8) + 16;
+            let y1 = ((66 * r2 + 129 * g2 + 25 * b2 + 128) >> 8) + 16;
+
+            let r_avg = (r1 + r2) >> 1;
+            let g_avg = (g1 + g2) >> 1;
+            let b_avg = (b1 + b2) >> 1;
+
+            let u = ((-38 * r_avg - 74 * g_avg + 112 * b_avg + 128) >> 8) + 128;
+            let v = ((112 * r_avg - 94 * g_avg - 18 * b_avg + 128) >> 8) + 128;
+
+            yuyv[yuyv_idx] = y0.clamp(0, 255) as u8;
+            yuyv[yuyv_idx + 1] = u.clamp(0, 255) as u8;
+            yuyv[yuyv_idx + 2] = y1.clamp(0, 255) as u8;
+            yuyv[yuyv_idx + 3] = v.clamp(0, 255) as u8;
+        }
+
+        &self.buffer
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Virtual camera driver registration check
+// ---------------------------------------------------------------------------
+
+#[allow(dead_code)]
+pub fn is_driver_registered() -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        is_windows_driver_registered()
+    }
+    #[cfg(target_os = "macos")]
+    {
+        is_macos_driver_registered()
+    }
+    #[cfg(target_os = "linux")]
+    {
+        is_linux_driver_registered()
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    {
+        false
     }
 }
 
@@ -548,16 +776,27 @@ fn prepare_linux_driver() -> Result<(), String> {
 
 #[cfg(target_os = "windows")]
 fn is_windows_driver_registered() -> bool {
-    let status = create_command("reg")
-        .args(&["query", "HKCR\\CLSID\\{A3FCE0F5-3493-419F-958A-ABA1250EC20B}"])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status();
+    let output = create_command("reg")
+        .args(&["query", "HKCR\\CLSID\\{A3FCE0F5-3493-419F-958A-ABA1250EC20B}\\InprocServer32", "/ve"])
+        .output();
 
-    match status {
-        Ok(s) => s.success(),
-        Err(_) => false,
+    if let Ok(out) = output {
+        if out.status.success() {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            for line in stdout.lines() {
+                if line.contains("REG_SZ") {
+                    let parts: Vec<&str> = line.split("REG_SZ").collect();
+                    if let Some(path_str) = parts.get(1) {
+                        let path = path_str.trim().trim_start_matches(r"\\?\");
+                        if !path.is_empty() && std::path::Path::new(path).exists() {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
     }
+    false
 }
 
 #[cfg(target_os = "windows")]
@@ -581,12 +820,9 @@ fn is_windows_driver_renamed() -> bool {
 }
 
 #[cfg(target_os = "windows")]
-fn prepare_windows_driver(app: &tauri::AppHandle) -> Result<(), String> {
-    let registered = is_windows_driver_registered();
-    let renamed = is_windows_driver_renamed();
-
-    if registered && renamed {
-        println!("[camera] Sync Camera driver is registered and properly named.");
+pub fn prepare_windows_driver(app: &tauri::AppHandle) -> Result<(), String> {
+    if is_windows_driver_registered() {
+        println!("[camera] Virtual camera driver is registered and verified on disk. Ready for streaming.");
         return Ok(());
     }
 
@@ -609,60 +845,51 @@ fn prepare_windows_driver(app: &tauri::AppHandle) -> Result<(), String> {
     }
 
     let dll_path = match dll_path {
-        Some(p) if p.exists() => p,
+        Some(p) if p.exists() => {
+            let canonical = std::fs::canonicalize(&p).unwrap_or(p);
+            let path_str = canonical.to_string_lossy().to_string();
+            let clean_path = path_str.trim_start_matches(r"\\?\").to_string();
+            std::path::PathBuf::from(clean_path)
+        }
         _ => {
             return Err("Bundled virtual camera module obs-virtualcam-module64.dll not found.".into());
         }
     };
 
-    if !registered {
-        println!("[camera] Virtual camera driver not registered. Registering and naming...");
-    } else {
-        println!("[camera] Virtual camera driver registered but not named. Naming...");
-    }
+    println!("[camera] Registering virtual camera driver at {:?} with elevated prompt...", dll_path);
 
-    let register_cmd = if !registered {
-        format!("regsvr32 /s \"{}\"; ", dll_path.to_string_lossy())
-    } else {
-        "".to_string()
-    };
-
-    let script = format!(
-        "{}reg add \"HKLM\\SOFTWARE\\Classes\\CLSID\\{{A3FCE0F5-3493-419F-958A-ABA1250EC20B}}\" /ve /d \"Sync Camera\" /f; \
-         reg add \"HKLM\\SOFTWARE\\Classes\\CLSID\\{{860BB310-5D01-11d0-BD3B-00A0C911CE86}}\\Instance\\{{A3FCE0F5-3493-419F-958A-ABA1250EC20B}}\" /v \"FriendlyName\" /d \"Sync Camera\" /f; \
-         reg add \"HKLM\\SOFTWARE\\Classes\\CLSID\\{{860BB310-5D01-11d0-BD3B-00A0C911CE86}}\\Instance\\{{A3FCE0F5-3493-419F-958A-ABA1250EC20B}}\" /ve /d \"Sync Camera\" /f; \
-         reg add \"HKLM\\SOFTWARE\\Classes\\WOW6432Node\\CLSID\\{{A3FCE0F5-3493-419F-958A-ABA1250EC20B}}\" /ve /d \"Sync Camera\" /f; \
-         reg add \"HKLM\\SOFTWARE\\Classes\\WOW6432Node\\CLSID\\{{860BB310-5D01-11d0-BD3B-00A0C911CE86}}\\Instance\\{{A3FCE0F5-3493-419F-958A-ABA1250EC20B}}\" /v \"FriendlyName\" /d \"Sync Camera\" /f; \
-         reg add \"HKLM\\SOFTWARE\\Classes\\WOW6432Node\\CLSID\\{{860BB310-5D01-11d0-BD3B-00A0C911CE86}}\\Instance\\{{A3FCE0F5-3493-419F-958A-ABA1250EC20B}}\" /ve /d \"Sync Camera\" /f",
-        register_cmd
+    let ps_script = format!(
+        "regsvr32.exe /s \"{}\"; \
+         Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Classes\\CLSID\\{{860BB310-5D01-11d0-BD3B-00A0C911CE86}}\\Instance\\{{A3FCE0F5-3493-419F-958A-ABA1250EC20B}}' -Name 'FriendlyName' -Value 'Sync Camera' -Force -ErrorAction SilentlyContinue; \
+         Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Classes\\CLSID\\{{A3FCE0F5-3493-419F-958A-ABA1250EC20B}}' -Name '(Default)' -Value 'Sync Camera' -Force -ErrorAction SilentlyContinue",
+        dll_path.to_string_lossy().replace('\'', "''")
     );
 
-    println!("[camera] Launching elevated script: {}", script);
+    let utf16_bytes: Vec<u8> = ps_script
+        .encode_utf16()
+        .flat_map(|u| u.to_le_bytes())
+        .collect();
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+    let encoded_cmd = STANDARD.encode(&utf16_bytes);
 
     let status = create_command("powershell")
         .args(&[
+            "-NoProfile",
             "-Command",
-            &format!(
-                "Start-Process powershell -ArgumentList '-NoProfile -Command \"{}\"' -Verb RunAs -Wait",
-                script
-            ),
+            &format!("Start-Process powershell -ArgumentList '-NoProfile', '-EncodedCommand', '{}' -Verb RunAs -Wait", encoded_cmd),
         ])
         .status()
         .map_err(|e| format!("Failed to launch elevated registration: {e}"))?;
 
     if !status.success() {
-        return Err("Registration/renaming failed or was cancelled by the user.".into());
+        return Err("Registration failed or was cancelled by the user.".into());
     }
 
     if !is_windows_driver_registered() {
-        return Err("DLL registration command completed, but class registry check still failed.".into());
+        return Err("DLL registration command completed, but virtual camera driver is not registered. Please ensure Administrator permission was granted.".into());
     }
 
-    if !is_windows_driver_renamed() {
-        return Err("DLL registered successfully, but naming registry check failed.".into());
-    }
-
-    println!("[camera] Virtual camera driver registered and named 'Sync Camera' successfully!");
+    println!("[camera] Virtual camera driver registered successfully!");
     Ok(())
 }
 
@@ -727,14 +954,14 @@ mod win_cam {
     impl WinVirtualCamera {
         pub fn create(w: u32, h: u32) -> Result<Self, String> {
             let cam = Camera::builder(w, h, 30.0)
-                .format(PixelFormat::RGB)
+                .format(PixelFormat::NV12)
                 .build()
                 .map_err(|e| format!("Failed to create Windows virtual camera: {e}"))?;
             Ok(WinVirtualCamera(cam))
         }
 
-        pub fn send(&mut self, rgb: &[u8]) -> Result<(), String> {
-            self.0.send(rgb).map_err(|e| e.to_string())
+        pub fn send(&mut self, nv12: &[u8]) -> Result<(), String> {
+            self.0.send(nv12).map_err(|e| e.to_string())
         }
     }
 }

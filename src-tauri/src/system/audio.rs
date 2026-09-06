@@ -10,9 +10,7 @@ pub struct AudioStreamServer {
     pub port: u16,
 }
 
-fn wav_header() -> [u8; 44] {
-    let channels: u16 = 2;
-    let sample_rate: u32 = 44100;
+fn wav_header(sample_rate: u32, channels: u16) -> [u8; 44] {
     let bits_per_sample: u16 = 16;
     let byte_rate = sample_rate * (channels as u32) * (bits_per_sample as u32 / 8);
     let block_align = channels * (bits_per_sample / 8);
@@ -33,6 +31,86 @@ fn wav_header() -> [u8; 44] {
     h[36..40].copy_from_slice(b"data");
     h[40..44].copy_from_slice(&data_size.to_le_bytes());
     h
+}
+
+#[cfg(target_os = "windows")]
+fn convert_f32_to_stereo_i16(data: &[f32], channels: usize, pcm: &mut Vec<u8>) {
+    if channels == 2 {
+        pcm.reserve(data.len() * 2);
+        for &sample in data {
+            let s = (sample.clamp(-1.0, 1.0) * 32767.0) as i16;
+            pcm.extend_from_slice(&s.to_le_bytes());
+        }
+    } else if channels == 1 {
+        pcm.reserve(data.len() * 4);
+        for &sample in data {
+            let s = (sample.clamp(-1.0, 1.0) * 32767.0) as i16;
+            let bytes = s.to_le_bytes();
+            pcm.extend_from_slice(&bytes);
+            pcm.extend_from_slice(&bytes);
+        }
+    } else if channels > 2 {
+        let frames = data.len() / channels;
+        pcm.reserve(frames * 4);
+        for chunk in data.chunks_exact(channels) {
+            let left = (chunk[0].clamp(-1.0, 1.0) * 32767.0) as i16;
+            let right = (chunk[1].clamp(-1.0, 1.0) * 32767.0) as i16;
+            pcm.extend_from_slice(&left.to_le_bytes());
+            pcm.extend_from_slice(&right.to_le_bytes());
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn convert_i16_to_stereo_i16(data: &[i16], channels: usize, pcm: &mut Vec<u8>) {
+    if channels == 2 {
+        pcm.reserve(data.len() * 2);
+        for &sample in data {
+            pcm.extend_from_slice(&sample.to_le_bytes());
+        }
+    } else if channels == 1 {
+        pcm.reserve(data.len() * 4);
+        for &sample in data {
+            let bytes = sample.to_le_bytes();
+            pcm.extend_from_slice(&bytes);
+            pcm.extend_from_slice(&bytes);
+        }
+    } else if channels > 2 {
+        let frames = data.len() / channels;
+        pcm.reserve(frames * 4);
+        for chunk in data.chunks_exact(channels) {
+            pcm.extend_from_slice(&chunk[0].to_le_bytes());
+            pcm.extend_from_slice(&chunk[1].to_le_bytes());
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn convert_u16_to_stereo_i16(data: &[u16], channels: usize, pcm: &mut Vec<u8>) {
+    if channels == 2 {
+        pcm.reserve(data.len() * 2);
+        for &sample in data {
+            let s = (sample as i32 - 32768) as i16;
+            pcm.extend_from_slice(&s.to_le_bytes());
+        }
+    } else if channels == 1 {
+        pcm.reserve(data.len() * 4);
+        for &sample in data {
+            let s = (sample as i32 - 32768) as i16;
+            let bytes = s.to_le_bytes();
+            pcm.extend_from_slice(&bytes);
+            pcm.extend_from_slice(&bytes);
+        }
+    } else if channels > 2 {
+        let frames = data.len() / channels;
+        pcm.reserve(frames * 4);
+        for chunk in data.chunks_exact(channels) {
+            let left = (chunk[0] as i32 - 32768) as i16;
+            let right = (chunk[1] as i32 - 32768) as i16;
+            pcm.extend_from_slice(&left.to_le_bytes());
+            pcm.extend_from_slice(&right.to_le_bytes());
+        }
+    }
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -57,6 +135,7 @@ fn stream_audio_linux(mut socket: std::net::TcpStream, running: Arc<AtomicBool>)
         Ok(c) => c,
         Err(e) => {
             eprintln!("[audio] Failed to start parec: {e}");
+            let _ = socket.write_all(b"HTTP/1.1 500 Internal Server Error\r\n\r\n");
             return;
         }
     };
@@ -65,9 +144,24 @@ fn stream_audio_linux(mut socket: std::net::TcpStream, running: Arc<AtomicBool>)
         Some(out) => out,
         None => {
             let _ = parec_child.kill();
+            let _ = socket.write_all(b"HTTP/1.1 500 Internal Server Error\r\n\r\n");
             return;
         }
     };
+
+    let headers = "HTTP/1.1 200 OK\r\n\
+                   Content-Type: audio/wav\r\n\
+                   Connection: close\r\n\
+                   Cache-Control: no-cache\r\n\r\n";
+    if socket.write_all(headers.as_bytes()).is_err() {
+        let _ = parec_child.kill();
+        return;
+    }
+
+    if socket.write_all(&wav_header(44100, 2)).is_err() {
+        let _ = parec_child.kill();
+        return;
+    }
 
     let mut buf = [0u8; 512];
     while running.load(Ordering::Relaxed) {
@@ -94,44 +188,108 @@ fn stream_audio_windows(mut socket: std::net::TcpStream, running: Arc<AtomicBool
         Some(d) => d,
         None => {
             eprintln!("[audio] No default output device found");
+            let _ = socket.write_all(b"HTTP/1.1 500 Internal Server Error\r\n\r\n");
             return;
         }
     };
 
-    let config = cpal::StreamConfig {
-        channels: 2,
-        sample_rate: cpal::SampleRate(44100),
-        buffer_size: cpal::BufferSize::Default,
+    let default_config = match device.default_output_config() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("[audio] Failed to get default output config: {e}");
+            let _ = socket.write_all(b"HTTP/1.1 500 Internal Server Error\r\n\r\n");
+            return;
+        }
     };
 
-    let (tx, rx) = std::sync::mpsc::sync_channel::<Vec<u8>>(100);
+    let in_sample_rate = default_config.sample_rate().0;
+    let in_channels = default_config.channels() as usize;
+    let sample_format = default_config.sample_format();
+    let stream_config: cpal::StreamConfig = default_config.into();
 
-    let stream = device.build_input_stream(
-        &config,
-        move |data: &[f32], _: &_| {
-            let mut pcm = Vec::with_capacity(data.len() * 2);
-            for &sample in data {
-                let s = (sample.clamp(-1.0, 1.0) * 32767.0) as i16;
-                pcm.extend_from_slice(&s.to_le_bytes());
-            }
-            let _ = tx.send(pcm);
-        },
-        |err| eprintln!("[audio] Stream error: {err}"),
-        None,
-    );
+    let out_channels: u16 = 2; // Standard stereo for mobile client
+    let out_sample_rate = in_sample_rate;
+
+    println!("[audio] Setting up loopback: rate={in_sample_rate}, channels={in_channels}, format={sample_format:?}");
+
+    let (tx, rx) = std::sync::mpsc::sync_channel::<Vec<u8>>(100);
+    let err_fn = |err| eprintln!("[audio] Loopback stream error: {err}");
+
+    let stream = match sample_format {
+        cpal::SampleFormat::F32 => {
+            let tx = tx.clone();
+            device.build_input_stream(
+                &stream_config,
+                move |data: &[f32], _: &_| {
+                    let mut pcm = Vec::new();
+                    convert_f32_to_stereo_i16(data, in_channels, &mut pcm);
+                    let _ = tx.try_send(pcm);
+                },
+                err_fn,
+                None,
+            )
+        }
+        cpal::SampleFormat::I16 => {
+            let tx = tx.clone();
+            device.build_input_stream(
+                &stream_config,
+                move |data: &[i16], _: &_| {
+                    let mut pcm = Vec::new();
+                    convert_i16_to_stereo_i16(data, in_channels, &mut pcm);
+                    let _ = tx.try_send(pcm);
+                },
+                err_fn,
+                None,
+            )
+        }
+        cpal::SampleFormat::U16 => {
+            let tx = tx.clone();
+            device.build_input_stream(
+                &stream_config,
+                move |data: &[u16], _: &_| {
+                    let mut pcm = Vec::new();
+                    convert_u16_to_stereo_i16(data, in_channels, &mut pcm);
+                    let _ = tx.try_send(pcm);
+                },
+                err_fn,
+                None,
+            )
+        }
+        _ => {
+            eprintln!("[audio] Unsupported sample format: {sample_format:?}");
+            let _ = socket.write_all(b"HTTP/1.1 500 Internal Server Error\r\n\r\n");
+            return;
+        }
+    };
 
     let stream = match stream {
         Ok(s) => s,
         Err(e) => {
             eprintln!("[audio] Failed to build loopback stream: {e}");
+            let _ = socket.write_all(b"HTTP/1.1 500 Internal Server Error\r\n\r\n");
             return;
         }
     };
 
     if let Err(e) = stream.play() {
         eprintln!("[audio] Failed to play stream: {e}");
+        let _ = socket.write_all(b"HTTP/1.1 500 Internal Server Error\r\n\r\n");
         return;
     }
+
+    let headers = "HTTP/1.1 200 OK\r\n\
+                   Content-Type: audio/wav\r\n\
+                   Connection: close\r\n\
+                   Cache-Control: no-cache\r\n\r\n";
+    if socket.write_all(headers.as_bytes()).is_err() {
+        return;
+    }
+
+    if socket.write_all(&wav_header(out_sample_rate, out_channels)).is_err() {
+        return;
+    }
+
+    println!("[audio] Loopback stream active on Windows (rate: {out_sample_rate}Hz)");
 
     while running.load(Ordering::Relaxed) {
         match rx.recv_timeout(Duration::from_millis(100)) {
@@ -149,6 +307,18 @@ fn stream_audio_windows(mut socket: std::net::TcpStream, running: Arc<AtomicBool
 
 impl AudioStreamServer {
     pub fn start() -> Result<Self, String> {
+        #[cfg(target_os = "windows")]
+        {
+            use cpal::traits::{DeviceTrait, HostTrait};
+            let host = cpal::default_host();
+            let device = host
+                .default_output_device()
+                .ok_or_else(|| "No default audio output device found on Windows".to_string())?;
+            let _ = device
+                .default_output_config()
+                .map_err(|e| format!("Default audio output config unsupported: {e}"))?;
+        }
+
         let listener = TcpListener::bind("0.0.0.0:0").map_err(|e| format!("Bind failed: {e}"))?;
         let port = listener.local_addr().map_err(|e| e.to_string())?.port();
         listener.set_nonblocking(true).map_err(|e| format!("Set nonblocking failed: {e}"))?;
@@ -161,22 +331,10 @@ impl AudioStreamServer {
                     break;
                 }
                 match listener.accept() {
-                    Ok((mut socket, addr)) => {
+                    Ok((socket, addr)) => {
                         socket.set_nonblocking(false).ok();
                         socket.set_nodelay(true).ok();
                         println!("[audio] Client connected from {addr}");
-
-                        let headers = "HTTP/1.1 200 OK\r\n\
-                                       Content-Type: audio/wav\r\n\
-                                       Connection: close\r\n\
-                                       Cache-Control: no-cache\r\n\r\n";
-                        if socket.write_all(headers.as_bytes()).is_err() {
-                            continue;
-                        }
-
-                        if socket.write_all(&wav_header()).is_err() {
-                            continue;
-                        }
 
                         let r_clone = running_clone.clone();
                         thread::spawn(move || {

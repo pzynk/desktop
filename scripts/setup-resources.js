@@ -9,7 +9,22 @@ const __dirname = path.dirname(__filename);
 const targetDir = path.resolve(__dirname, '../src-tauri/resources');
 const targetFile = path.join(targetDir, 'obs-virtualcam-module64.dll');
 
-if (fs.existsSync(targetFile)) {
+// Ensure target directory exists
+if (!fs.existsSync(targetDir)) {
+  fs.mkdirSync(targetDir, { recursive: true });
+}
+
+// On non-Windows platforms, the Windows DLL is not needed at runtime (Linux uses v4l2loopback).
+// A dummy placeholder is sufficient to satisfy Tauri's bundle resource check.
+if (process.platform !== 'win32') {
+  if (!fs.existsSync(targetFile)) {
+    fs.writeFileSync(targetFile, '');
+    console.log(`[setup-resources] Non-Windows platform detected (${process.platform}). Created placeholder at ${targetFile}`);
+  }
+  process.exit(0);
+}
+
+if (fs.existsSync(targetFile) && fs.statSync(targetFile).size > 1000) {
   console.log(`[setup-resources] obs-virtualcam-module64.dll already exists at ${targetFile}`);
   process.exit(0);
 }
@@ -22,11 +37,6 @@ const url = 'https://github.com/obsproject/obs-studio/releases/download/30.1.2/O
 const dllZipPath = 'data/obs-plugins/win-dshow/obs-virtualcam-module64.dll';
 
 try {
-  // Ensure target directory exists
-  if (!fs.existsSync(targetDir)) {
-    fs.mkdirSync(targetDir, { recursive: true });
-  }
-
   // Download the ZIP file using curl
   console.log(`[setup-resources] Downloading from: ${url}`);
   execSync(`curl -L "${url}" -o "${tempZip}"`, { stdio: 'inherit' });
